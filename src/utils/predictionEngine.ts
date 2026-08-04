@@ -1,4 +1,4 @@
-import { Task, TimetableSlot, ConsequenceForecast, IntensityMode } from '@/types/ripple';
+import { Task, TimetableSlot, ConsequenceForecast, IntensityMode, DomainConsequence } from '@/types/ripple';
 import { getTimeRemaining, calculateTaskStatus } from './timeUtils';
 
 export function generateConsequenceForecast(
@@ -59,18 +59,26 @@ export function generateConsequenceForecast(
     cinematicScene = `Delaying "${task.title}" puts your ${subject} grade under direct pressure. ${teacher} holds a strict standard for ${stakes.replace('_', ' ').toLowerCase()} assignments. Delaying by 2 hours trades a relaxed evening for an all-nighter emergency prep.`;
   }
 
+  // Helper function returning strongly-typed DomainConsequence severity
+  const getSeverity = (score: number): DomainConsequence['severity'] => {
+    if (score > 70) return 'severe';
+    if (score > 50) return 'high';
+    if (score > 30) return 'medium';
+    return 'low';
+  };
+
   // Branching Domain Forecasts
-  const academic = {
-    domain: 'Academic' as const,
-    severity: academicScore > 70 ? 'severe' : academicScore > 50 ? 'high' : academicScore > 30 ? 'medium' : 'low',
+  const academic: DomainConsequence = {
+    domain: 'Academic',
+    severity: getSeverity(academicScore),
     title: academicScore > 60 ? `Direct -${Math.round(weight * 0.5)}% Grade Penalty in ${subject}` : `Minor Grade Risk in ${subject}`,
     description: `${strictnessText} Missing or rushed submission impacts your internal grade weight (${weight}% category weight).`,
     impactScore: Math.round(academicScore)
   };
 
-  const social = {
-    domain: 'Social' as const,
-    severity: socialScore > 70 ? 'severe' : socialScore > 50 ? 'high' : socialScore > 30 ? 'medium' : 'low',
+  const social: DomainConsequence = {
+    domain: 'Social',
+    severity: getSeverity(socialScore),
     title: strictness === 'PUBLIC_SCOLD' ? 'Public Accountability In Class' : 'Group Study Reputational Stress',
     description: strictness === 'PUBLIC_SCOLD' 
       ? `High probability of uncomfortable public feedback or cold-call during the ${subject} slot.`
@@ -78,9 +86,9 @@ export function generateConsequenceForecast(
     impactScore: Math.round(socialScore)
   };
 
-  const physical = {
-    domain: 'Physical' as const,
-    severity: physicalScore > 70 ? 'severe' : physicalScore > 50 ? 'high' : physicalScore > 30 ? 'medium' : 'low',
+  const physical: DomainConsequence = {
+    domain: 'Physical',
+    severity: getSeverity(physicalScore),
     title: status === 'critical' ? 'Severe Sleep Deprivation & Caffeine Crash' : 'Late Night Fatigue',
     description: status === 'critical' 
       ? `Pushing this task past 11 PM cuts your deep sleep cycle to under 4.5 hours, impairing memory retention for tomorrow's classes.`
@@ -88,9 +96,9 @@ export function generateConsequenceForecast(
     impactScore: Math.round(physicalScore)
   };
 
-  const financial = {
-    domain: 'Financial' as const,
-    severity: financialScore > 70 ? 'severe' : financialScore > 50 ? 'high' : financialScore > 30 ? 'medium' : 'low',
+  const financial: DomainConsequence = {
+    domain: 'Financial',
+    severity: getSeverity(financialScore),
     title: 'Resource & Retake Opportunity Cost',
     description: weight > 30 
       ? `Higher likelihood of needing paid tutoring or course repeat fee risks if foundational grade drops.`
@@ -98,17 +106,17 @@ export function generateConsequenceForecast(
     impactScore: Math.round(financialScore)
   };
 
-  const emotional = {
-    domain: 'Emotional' as const,
-    severity: emotionalScore > 70 ? 'severe' : emotionalScore > 50 ? 'high' : emotionalScore > 30 ? 'medium' : 'low',
+  const emotional: DomainConsequence = {
+    domain: 'Emotional',
+    severity: getSeverity(emotionalScore),
     title: 'Compounding Task Guilt & Anxiety',
     description: `Carrying unfinished weight for "${task.title}" ruins your downtime, causing background dread during leisure activities.`,
     impactScore: Math.round(emotionalScore)
   };
 
-  const longTerm = {
-    domain: 'Long-term' as const,
-    severity: longTermScore > 70 ? 'severe' : longTermScore > 50 ? 'high' : longTermScore > 30 ? 'medium' : 'low',
+  const longTerm: DomainConsequence = {
+    domain: 'Long-term',
+    severity: getSeverity(longTermScore),
     title: 'Teacher Recommendation & Habit Drift',
     description: `${teacher}'s perception of your reliability directly influences future reference letters, project group pairing, and academic standing.`,
     impactScore: Math.round(longTermScore)
