@@ -118,7 +118,7 @@ const initialSampleTasks: Task[] = [
     title: 'Physics Wave Optics Lab Problem Set',
     description: 'Solve 12 numericals on double-slit interference and write error analysis.',
     slotId: 'slot-1',
-    dueDate: hoursFromNow(2.5), // Urgent!
+    dueDate: hoursFromNow(2.5),
     estimatedHours: 2.0,
     completionPercentage: 20,
     taskType: 'problem_set',
@@ -154,7 +154,7 @@ const initialSampleTasks: Task[] = [
     title: 'English Hamlet Theme Analysis Essay',
     description: '1,200-word critical analysis on madness vs feigned madness in Act III.',
     slotId: 'slot-4',
-    dueDate: hoursAgo(2), // Overdue!
+    dueDate: hoursAgo(2),
     estimatedHours: 2.5,
     completionPercentage: 40,
     taskType: 'essay',
@@ -208,33 +208,46 @@ const initialDebt: ProcrastinationDebt = {
   ]
 };
 
+function safeGetLocalStorage<T>(key: string, fallback: T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? (JSON.parse(saved) as T) : fallback;
+  } catch (error) {
+    console.error(`Failed to parse ${key} from localStorage:`, error);
+    return fallback;
+  }
+}
+
+function safeSetLocalStorage<T>(key: string, value: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Failed to save ${key} to localStorage:`, error);
+  }
+}
+
 const RippleContext = createContext<RippleContextType | undefined>(undefined);
 
 export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [slots, setSlots] = useState<TimetableSlot[]>(() => {
-    const saved = localStorage.getItem('ripple_slots');
-    return saved ? JSON.parse(saved) : initialSampleSlots;
-  });
+  const [slots, setSlots] = useState<TimetableSlot[]>(() => 
+    safeGetLocalStorage('ripple_slots', initialSampleSlots)
+  );
 
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem('ripple_tasks');
-    return saved ? JSON.parse(saved) : initialSampleTasks;
-  });
+  const [tasks, setTasks] = useState<Task[]>(() => 
+    safeGetLocalStorage('ripple_tasks', initialSampleTasks)
+  );
 
-  const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>(() => {
-    const saved = localStorage.getItem('ripple_evidence');
-    return saved ? JSON.parse(saved) : initialSampleEvidence;
-  });
+  const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>(() => 
+    safeGetLocalStorage('ripple_evidence', initialSampleEvidence)
+  );
 
-  const [debt, setDebt] = useState<ProcrastinationDebt>(() => {
-    const saved = localStorage.getItem('ripple_debt');
-    return saved ? JSON.parse(saved) : initialDebt;
-  });
+  const [debt, setDebt] = useState<ProcrastinationDebt>(() => 
+    safeGetLocalStorage('ripple_debt', initialDebt)
+  );
 
-  const [settings, setSettings] = useState<UserSettings>(() => {
-    const saved = localStorage.getItem('ripple_settings');
-    return saved ? JSON.parse(saved) : defaultSettings;
-  });
+  const [settings, setSettings] = useState<UserSettings>(() => 
+    safeGetLocalStorage('ripple_settings', defaultSettings)
+  );
 
   const [activeTaskForPrediction, setActiveTaskForPrediction] = useState<Task | null>(null);
   const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
@@ -242,23 +255,23 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Sync to LocalStorage
   useEffect(() => {
-    localStorage.setItem('ripple_slots', JSON.stringify(slots));
+    safeSetLocalStorage('ripple_slots', slots);
   }, [slots]);
 
   useEffect(() => {
-    localStorage.setItem('ripple_tasks', JSON.stringify(tasks));
+    safeSetLocalStorage('ripple_tasks', tasks);
   }, [tasks]);
 
   useEffect(() => {
-    localStorage.setItem('ripple_evidence', JSON.stringify(evidenceEntries));
+    safeSetLocalStorage('ripple_evidence', evidenceEntries);
   }, [evidenceEntries]);
 
   useEffect(() => {
-    localStorage.setItem('ripple_debt', JSON.stringify(debt));
+    safeSetLocalStorage('ripple_debt', debt);
   }, [debt]);
 
   useEffect(() => {
-    localStorage.setItem('ripple_settings', JSON.stringify(settings));
+    safeSetLocalStorage('ripple_settings', settings);
   }, [settings]);
 
   // Dynamic Ticker: refresh task statuses every 30 seconds
