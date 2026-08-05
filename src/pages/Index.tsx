@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
-import { RippleProvider, useRipple } from '@/context/RippleContext';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useRipple } from '@/context/RippleContext';
 import { Navbar } from '@/components/header/Navbar';
 import { WarRoom } from '@/components/doomsday/WarRoom';
 import { PredictionView } from '@/components/prediction/PredictionView';
@@ -15,6 +16,7 @@ import { NewTaskModal } from '@/components/task/NewTaskModal';
 import { Task } from '@/types/ripple';
 
 const RippleAppContent: React.FC = () => {
+  const location = useLocation();
   const {
     activeTaskForPrediction,
     activeFocusTask,
@@ -27,6 +29,15 @@ const RippleAppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('warroom');
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [renegotiateTask, setRenegotiateTask] = useState<Task | null>(null);
+
+  // Check URL query params (e.g., onboarding from signup)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && ['warroom', 'timetable', 'evidence', 'debt'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [location.search]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white">
@@ -54,7 +65,7 @@ const RippleAppContent: React.FC = () => {
         {activeTab === 'debt' && <DebtLedgerView />}
       </main>
 
-      {/* Footer Branding - Removed MadeWithDyad */}
+      {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-4">
       </footer>
 
@@ -90,9 +101,5 @@ const RippleAppContent: React.FC = () => {
 };
 
 export default function Index() {
-  return (
-    <RippleProvider>
-      <RippleAppContent />
-    </RippleProvider>
-  );
+  return <RippleAppContent />;
 }
