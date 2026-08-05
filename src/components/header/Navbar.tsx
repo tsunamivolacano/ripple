@@ -1,7 +1,7 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { IntensitySelector } from './IntensitySelector';
 import { useRipple } from '@/context/RippleContext';
-import { ALL_PERSONAS } from '@/data/ripplePersonaData';
 import { 
   Zap, 
   Clock, 
@@ -9,19 +9,11 @@ import {
   FileText, 
   TrendingDown, 
   Plus, 
-  UserCheck,
-  ChevronDown
+  LogOut,
+  User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
 interface NavbarProps {
   activeTab: string;
@@ -30,9 +22,13 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, currentPersonaId, loadPersonaData } = useRipple();
+  const navigate = useNavigate();
+  const { user, debt, logout } = useRipple();
 
-  const currentPersona = ALL_PERSONAS.find(p => p.id === currentPersonaId) || ALL_PERSONAS[0];
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   const navItems = [
     { id: 'warroom', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
@@ -66,57 +62,15 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
           </div>
 
           {/* Quick Action Center */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <IntensitySelector />
 
-            {/* Persona Switcher Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-200 gap-2"
-                >
-                  <span className="text-sm">{currentPersona.avatarBadge}</span>
-                  <span className="font-semibold">{currentPersona.name}</span>
-                  <span className="text-[10px] text-slate-400 font-normal">({currentPersona.role})</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-slate-900 border-slate-800 text-slate-100 w-64 rounded-xl p-1">
-                <DropdownMenuLabel className="text-[11px] font-mono text-slate-400 uppercase tracking-wider px-2 py-1.5">
-                  Select Demo Persona Profile
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-slate-800" />
-                {ALL_PERSONAS.map((persona) => {
-                  const isSelected = persona.id === currentPersonaId;
-                  return (
-                    <DropdownMenuItem
-                      key={persona.id}
-                      onClick={() => loadPersonaData(persona.id)}
-                      className={`cursor-pointer rounded-lg px-2.5 py-2 flex items-start gap-2.5 transition-colors ${
-                        isSelected
-                          ? 'bg-rose-500/15 text-white font-medium border border-rose-500/30'
-                          : 'hover:bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <span className="text-lg shrink-0 mt-0.5">{persona.avatarBadge}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold truncate">{persona.name}</span>
-                          {isSelected && (
-                            <Badge variant="outline" className="text-[9px] border-rose-500/40 text-rose-300 bg-rose-950/40">
-                              Active
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 truncate">{persona.role}</p>
-                      </div>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {user && (
+              <div className="hidden sm:flex items-center gap-2 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
+                <User className="w-3.5 h-3.5 text-rose-400" />
+                <span className="text-slate-300 truncate max-w-[140px] font-medium">{user.email}</span>
+              </div>
+            )}
 
             <Button
               size="sm"
@@ -125,6 +79,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
             >
               <Plus className="w-4 h-4" />
               New Task
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-400 hover:text-white gap-1.5"
+              title="Log Out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Log Out</span>
             </Button>
           </div>
         </div>
