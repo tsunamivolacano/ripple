@@ -1,7 +1,6 @@
 import { supabase } from './client';
-import { TimetableSlot, Task, EvidenceEntry, ProcrastinationDebt, UserSettings, UserProfile } from '@/types/ripple';
+import { TimetableSlot, Task, EvidenceEntry, ProcrastinationDebt, UserProfile } from '@/types/ripple';
 
-// Table names
 export const TABLES = {
   PROFILES: 'profiles',
   TIMETABLE_SLOTS: 'timetable_slots',
@@ -10,16 +9,9 @@ export const TABLES = {
   PROCRASTINATION_DEBT: 'procrastination_debt'
 } as const;
 
-// Fetch Profile
 export async function fetchProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from(TABLES.PROFILES)
-    .select('*')
-    .eq('id', userId)
-    .single();
-
+  const { data, error } = await supabase.from(TABLES.PROFILES).select('*').eq('id', userId).single();
   if (error || !data) return null;
-
   return {
     id: data.id,
     fullName: data.full_name || '',
@@ -29,82 +21,58 @@ export async function fetchProfile(userId: string): Promise<UserProfile | null> 
   };
 }
 
-// Fetch Timetable Slots for User
 export async function fetchUserSlots(userId: string): Promise<TimetableSlot[]> {
-  const { data, error } = await supabase
-    .from(TABLES.TIMETABLE_SLOTS)
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true });
-
+  const { data, error } = await supabase.from(TABLES.TIMETABLE_SLOTS).select('*').eq('user_id', userId);
   if (error || !data) return [];
-
   return data.map((row: any) => ({
     id: row.id,
-    userId: row.user_id,
     subject: row.subject,
     dayOfWeek: row.day_of_week,
     startTime: row.start_time,
     endTime: row.end_time,
-    room: row.room || '',
+    room: row.room,
     teacherName: row.teacher_name,
     strictnessTag: row.strictness_tag,
     stakesTag: row.stakes_tag,
-    weight: row.weight || 20,
-    notes: row.notes || ''
+    weight: row.weight,
+    notes: row.notes
   }));
 }
 
-// Save Timetable Slot
 export async function saveUserSlot(userId: string, slot: TimetableSlot): Promise<void> {
-  await supabase
-    .from(TABLES.TIMETABLE_SLOTS)
-    .upsert({
-      id: slot.id,
-      user_id: userId,
-      subject: slot.subject,
-      day_of_week: slot.dayOfWeek,
-      start_time: slot.startTime,
-      end_time: slot.endTime,
-      room: slot.room,
-      teacher_name: slot.teacherName,
-      strictness_tag: slot.strictnessTag,
-      stakes_tag: slot.stakesTag,
-      weight: slot.weight,
-      notes: slot.notes
-    });
+  await supabase.from(TABLES.TIMETABLE_SLOTS).upsert({
+    id: slot.id,
+    user_id: userId,
+    subject: slot.subject,
+    day_of_week: slot.dayOfWeek,
+    start_time: slot.startTime,
+    end_time: slot.endTime,
+    room: slot.room,
+    teacher_name: slot.teacherName,
+    strictness_tag: slot.strictnessTag,
+    stakes_tag: slot.stakesTag,
+    weight: slot.weight,
+    notes: slot.notes
+  });
 }
 
-// Delete Timetable Slot
 export async function deleteUserSlot(userId: string, slotId: string): Promise<void> {
-  await supabase
-    .from(TABLES.TIMETABLE_SLOTS)
-    .delete()
-    .eq('id', slotId)
-    .eq('user_id', userId);
+  await supabase.from(TABLES.TIMETABLE_SLOTS).delete().eq('id', slotId).eq('user_id', userId);
 }
 
-// Fetch Tasks for User
 export async function fetchUserTasks(userId: string): Promise<Task[]> {
-  const { data, error } = await supabase
-    .from(TABLES.TASKS)
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
+  const { data, error } = await supabase.from(TABLES.TASKS).select('*').eq('user_id', userId);
   if (error || !data) return [];
-
   return data.map((row: any) => ({
     id: row.id,
-    userId: row.user_id,
-    title: row.title,
-    description: row.description || '',
     slotId: row.slot_id,
+    title: row.title,
+    description: row.description,
     dueDate: row.due_date,
-    estimatedHours: Number(row.estimated_hours || 1),
-    completionPercentage: Number(row.completion_percentage || 0),
-    taskType: row.task_type || 'problem_set',
-    status: row.status || 'manageable',
+    estimatedHours: row.estimated_hours,
+    completionPercentage: row.completion_percentage,
+    taskType: row.task_type,
+    status: row.status,
     createdAt: row.created_at,
     completedAt: row.completed_at,
     renegotiatedCount: row.renegotiated_count,
@@ -112,50 +80,34 @@ export async function fetchUserTasks(userId: string): Promise<Task[]> {
   }));
 }
 
-// Save Task
 export async function saveUserTask(userId: string, task: Task): Promise<void> {
-  await supabase
-    .from(TABLES.TASKS)
-    .upsert({
-      id: task.id,
-      user_id: userId,
-      slot_id: task.slotId,
-      title: task.title,
-      description: task.description,
-      due_date: task.dueDate,
-      estimated_hours: task.estimatedHours,
-      completion_percentage: task.completionPercentage,
-      task_type: task.taskType,
-      status: task.status,
-      created_at: task.createdAt,
-      completed_at: task.completedAt,
-      renegotiated_count: task.renegotiatedCount,
-      last_renegotiated_at: task.lastRenegotiatedAt
-    });
+  await supabase.from(TABLES.TASKS).upsert({
+    id: task.id,
+    user_id: userId,
+    slot_id: task.slotId,
+    title: task.title,
+    description: task.description,
+    due_date: task.dueDate,
+    estimated_hours: task.estimatedHours,
+    completion_percentage: task.completionPercentage,
+    task_type: task.taskType,
+    status: task.status,
+    created_at: task.createdAt,
+    completed_at: task.completedAt,
+    renegotiated_count: task.renegotiatedCount,
+    last_renegotiated_at: task.lastRenegotiatedAt
+  });
 }
 
-// Delete Task
 export async function deleteUserTask(userId: string, taskId: string): Promise<void> {
-  await supabase
-    .from(TABLES.TASKS)
-    .delete()
-    .eq('id', taskId)
-    .eq('user_id', userId);
+  await supabase.from(TABLES.TASKS).delete().eq('id', taskId).eq('user_id', userId);
 }
 
-// Fetch Evidence Log for User
 export async function fetchUserEvidence(userId: string): Promise<EvidenceEntry[]> {
-  const { data, error } = await supabase
-    .from(TABLES.EVIDENCE_LOG)
-    .select('*')
-    .eq('user_id', userId)
-    .order('date_logged', { ascending: false });
-
+  const { data, error } = await supabase.from(TABLES.EVIDENCE_LOG).select('*').eq('user_id', userId);
   if (error || !data) return [];
-
   return data.map((row: any) => ({
     id: row.id,
-    userId: row.user_id,
     taskId: row.task_id,
     taskTitle: row.task_title,
     subject: row.subject,
@@ -169,64 +121,43 @@ export async function fetchUserEvidence(userId: string): Promise<EvidenceEntry[]
   }));
 }
 
-// Save Evidence Entry
 export async function saveUserEvidence(userId: string, entry: EvidenceEntry): Promise<void> {
-  await supabase
-    .from(TABLES.EVIDENCE_LOG)
-    .upsert({
-      id: entry.id,
-      user_id: userId,
-      task_id: entry.taskId,
-      task_title: entry.taskTitle,
-      subject: entry.subject,
-      teacher_name: entry.teacherName,
-      predicted_scenario: entry.predictedScenario,
-      actual_outcome: entry.actualOutcome,
-      was_on_time: entry.wasOnTime,
-      accuracy_rating: entry.accuracyRating,
-      date_logged: entry.dateLogged,
-      user_notes: entry.userNotes
-    });
+  await supabase.from(TABLES.EVIDENCE_LOG).upsert({
+    id: entry.id,
+    user_id: userId,
+    task_id: entry.taskId,
+    task_title: entry.taskTitle,
+    subject: entry.subject,
+    teacher_name: entry.teacherName,
+    predicted_scenario: entry.predictedScenario,
+    actual_outcome: entry.actualOutcome,
+    was_on_time: entry.wasOnTime,
+    accuracy_rating: entry.accuracyRating,
+    date_logged: entry.dateLogged,
+    user_notes: entry.userNotes
+  });
 }
 
-// Fetch Procrastination Debt
 export async function fetchUserDebt(userId: string): Promise<ProcrastinationDebt | null> {
-  const { data, error } = await supabase
-    .from(TABLES.PROCRASTINATION_DEBT)
-    .select('*')
-    .eq('user_id', userId)
-    .single();
-
+  const { data, error } = await supabase.from(TABLES.PROCRASTINATION_DEBT).select('*').eq('user_id', userId).single();
   if (error || !data) return null;
-
   return {
-    totalHoursBehind: Number(data.total_hours_behind || 0),
-    missedDeadlinesCount: Number(data.missed_deadlines_count || 0),
-    streakDays: Number(data.streak_days || 0),
-    compoundingScore: Number(data.compounding_score || 0),
-    weeklyDebtTrend: data.weekly_debt_trend || [
-      { day: 'Mon', debtHours: 0 },
-      { day: 'Tue', debtHours: 0 },
-      { day: 'Wed', debtHours: 0 },
-      { day: 'Thu', debtHours: 0 },
-      { day: 'Fri', debtHours: 0 },
-      { day: 'Sat', debtHours: 0 },
-      { day: 'Sun', debtHours: 0 }
-    ]
+    totalHoursBehind: data.total_hours_behind,
+    missedDeadlinesCount: data.missed_deadlines_count,
+    streakDays: data.streak_days,
+    compoundingScore: data.compounding_score,
+    weeklyDebtTrend: data.weekly_debt_trend
   };
 }
 
-// Save Procrastination Debt
 export async function saveUserDebt(userId: string, debt: ProcrastinationDebt): Promise<void> {
-  await supabase
-    .from(TABLES.PROCRASTINATION_DEBT)
-    .upsert({
-      user_id: userId,
-      total_hours_behind: debt.totalHoursBehind,
-      missed_deadlines_count: debt.missedDeadlinesCount,
-      streak_days: debt.streakDays,
-      compounding_score: debt.compoundingScore,
-      weekly_debt_trend: debt.weeklyDebtTrend,
-      updated_at: new Date().toISOString()
-    });
+  await supabase.from(TABLES.PROCRASTINATION_DEBT).upsert({
+    user_id: userId,
+    total_hours_behind: debt.totalHoursBehind,
+    missed_deadlines_count: debt.missedDeadlinesCount,
+    streak_days: debt.streakDays,
+    compounding_score: debt.compoundingScore,
+    weekly_debt_trend: debt.weeklyDebtTrend,
+    updated_at: new Date().toISOString()
+  });
 }

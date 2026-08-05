@@ -11,7 +11,7 @@ import {
 } from '@/types/ripple';
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { showSuccess, showError } from '@/utils/toast';
-import { ALL_PERSONAS, PERSONAS_MAP } from '@/data/ripplePersonaData';
+import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { 
   fetchProfile, 
   fetchUserSlots, 
@@ -36,42 +36,24 @@ interface RippleContextType {
   evidenceEntries: EvidenceEntry[];
   debt: ProcrastinationDebt;
   settings: UserSettings;
-  currentPersonaId: string;
   activeTaskForPrediction: Task | null;
   activeFocusTask: Task | null;
   completedTaskForCelebration: Task | null;
   setActiveTaskForPrediction: (task: Task | null) => void;
   setActiveFocusTask: (task: Task | null) => void;
   setCompletedTaskForCelebration: (task: Task | null) => void;
-  
-  // Auth actions
   logout: () => Promise<void>;
-
-  // Slot management
   addSlot: (slot: Omit<TimetableSlot, 'id'>) => void;
   updateSlot: (slot: TimetableSlot) => void;
   deleteSlot: (id: string) => void;
-
-  // Task management
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'status'>) => void;
   updateTaskProgress: (taskId: string, percentage: number) => void;
   completeTask: (taskId: string) => void;
   renegotiateTask: (taskId: string, newDueDate: string, reason: string) => void;
   deleteTask: (id: string) => void;
-
-  // Evidence log management
   logEvidence: (entry: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => void;
-
-  // Settings
   updateSettings: (newSettings: Partial<UserSettings>) => void;
-  
-  // Persona actions
-  loadPersonaData: (personaId: string) => void;
-  loadSampleData: () => void;
-  resetAllData: () => void;
 }
-
-const defaultPersona = PERSONAS_MAP['riya'];
 
 const emptyDebt: ProcrastinationDebt = {
   totalHoursBehind: 0,
@@ -79,12 +61,8 @@ const emptyDebt: ProcrastinationDebt = {
   streakDays: 0,
   compoundingScore: 0,
   weeklyDebtTrend: [
-    { day: 'Mon', debtHours: 0 },
-    { day: 'Tue', debtHours: 0 },
-    { day: 'Wed', debtHours: 0 },
-    { day: 'Thu', debtHours: 0 },
-    { day: 'Fri', debtHours: 0 },
-    { day: 'Sat', debtHours: 0 },
+    { day: 'Mon', debtHours: 0 }, { day: 'Tue', debtHours: 0 }, { day: 'Wed', debtHours: 0 },
+    { day: 'Thu', debtHours: 0 }, { day: 'Fri', debtHours: 0 }, { day: 'Sat', debtHours: 0 },
     { day: 'Sun', debtHours: 0 }
   ]
 };
@@ -97,18 +75,21 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  const [currentPersonaId, setCurrentPersonaId] = useState<string>('riya');
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>([]);
   const [debt, setDebt] = useState<ProcrastinationDebt>(emptyDebt);
-  const [settings, setSettings] = useState<UserSettings>(defaultPersona.settings);
+  const [settings, setSettings] = useState<UserSettings>({
+    intensityMode: 'coach',
+    isMinorProfile: false,
+    weeklyDigestOnly: false,
+    personalVelocityMultiplier: 1.0
+  });
 
   const [activeTaskForPrediction, setActiveTaskForPrediction] = useState<Task | null>(null);
   const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
 
-  // Monitor Supabase Auth Session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -116,26 +97,21 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (session?.user) {
         loadUserDataFromSupabase(session.user.id);
       } else {
-        // Fall back to local default demo profile for non-authenticated preview
-        setSlots(defaultPersona.slots);
-        setTasks(defaultPersona.tasks);
-        setEvidenceEntries(defaultPersona.evidenceEntries);
-        setDebt(defaultPersona.debt);
         setIsLoadingAuth(false);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         await loadUserDataFromSupabase(session.user.id);
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setProfile(null);
-        setSlots(defaultPersona.slots);
-        setTasks(defaultPersona.tasks);
-        setEvidenceEntries(defaultPersona.evidenceEntries);
-        setDebt(defaultPersona.debt);
+        setSlots([]);
+        setTasks([]);
+        setEvidenceEntries([]);
+        setDebt(emptyDebt);
       }
       setIsLoadingAuth(false);
     });
@@ -143,7 +119,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load User Data from Supabase
   const loadUserDataFromSupabase = async (userId: string) => {
     setIsLoadingAuth(true);
     try {
@@ -154,267 +129,123 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setSettings((prev) => ({ ...prev, intensityMode: userProfile.intensityMode }));
       }
 
-      const dbSlots = await fetchUserSlots(userId);
-      const dbTasks = await fetchUserTasks(userId);
-      const dbEvidence = await fetchUserEvidence(userId);
-      const dbDebt = await fetchUserDebt(userId);
+      const [dbSlots, dbTasks, dbEvidence, dbDebt] = await Promise.all([
+        fetchUserSlots(userId),
+        fetchUserTasks(userId),
+        fetchUserEvidence(userId),
+        fetchUserDebt(userId)
+      ]);
 
       setSlots(dbSlots);
       setTasks(dbTasks);
       setEvidenceEntries(dbEvidence);
       setDebt(dbDebt || emptyDebt);
     } catch (err) {
-      console.error("Error loading user data from Supabase:", err);
+      console.error("Supabase load error:", err);
     } finally {
       setIsLoadingAuth(false);
     }
   };
 
-  // Dynamic Status Ticker
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTasks((prevTasks) =>
-        prevTasks.map((t) => {
-          if (t.status === 'completed' || t.status === 'renegotiated') return t;
-          const newStatus = calculateTaskStatus(t.dueDate, t.estimatedHours, t.completionPercentage, settings.personalVelocityMultiplier);
-          return { ...t, status: newStatus };
-        })
-      );
-    }, 30000);
-    return () => clearInterval(timer);
-  }, [settings.personalVelocityMultiplier]);
-
   const logout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    setProfile(null);
     showSuccess("Logged out successfully.");
   };
 
-  const addSlot = (slotData: Omit<TimetableSlot, 'id'>) => {
-    const newSlot: TimetableSlot = {
-      ...slotData,
-      id: `slot-${Date.now()}`,
-      userId: user?.id
-    };
+  const addSlot = async (slotData: Omit<TimetableSlot, 'id'>) => {
+    const newSlot: TimetableSlot = { ...slotData, id: `slot-${Date.now()}` };
     setSlots((prev) => [...prev, newSlot]);
-    showSuccess(`Timetable slot for ${newSlot.subject} created.`);
-
-    if (user?.id) {
-      saveUserSlot(user.id, newSlot);
-    }
+    if (user?.id) await saveUserSlot(user.id, newSlot);
+    showSuccess(`Slot for ${newSlot.subject} saved.`);
   };
 
-  const updateSlot = (updatedSlot: TimetableSlot) => {
+  const updateSlot = async (updatedSlot: TimetableSlot) => {
     setSlots((prev) => prev.map((s) => (s.id === updatedSlot.id ? updatedSlot : s)));
-    showSuccess(`Updated ${updatedSlot.subject} slot.`);
-
-    if (user?.id) {
-      saveUserSlot(user.id, updatedSlot);
-    }
+    if (user?.id) await saveUserSlot(user.id, updatedSlot);
   };
 
-  const deleteSlot = (id: string) => {
+  const deleteSlot = async (id: string) => {
     setSlots((prev) => prev.filter((s) => s.id !== id));
-    showSuccess('Timetable slot removed.');
-
-    if (user?.id) {
-      deleteUserSlot(user.id, id);
-    }
+    if (user?.id) await deleteUserSlot(user.id, id);
   };
 
-  const addTask = (taskData: Omit<Task, 'id' | 'createdAt' | 'status'>) => {
-    const computedStatus = calculateTaskStatus(
-      taskData.dueDate,
-      taskData.estimatedHours,
-      taskData.completionPercentage,
-      settings.personalVelocityMultiplier
-    );
-
+  const addTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'status'>) => {
     const newTask: Task = {
       ...taskData,
       id: `task-${Date.now()}`,
-      userId: user?.id,
       createdAt: new Date().toISOString(),
-      status: computedStatus
+      status: calculateTaskStatus(taskData.dueDate, taskData.estimatedHours, taskData.completionPercentage, settings.personalVelocityMultiplier)
     };
-
     setTasks((prev) => [newTask, ...prev]);
-    showSuccess(`Task "${newTask.title}" added to War Room.`);
-
-    if (user?.id) {
-      saveUserTask(user.id, newTask);
-    }
+    if (user?.id) await saveUserTask(user.id, newTask);
+    showSuccess(`Task "${newTask.title}" created.`);
   };
 
-  const updateTaskProgress = (taskId: string, percentage: number) => {
+  const updateTaskProgress = async (taskId: string, percentage: number) => {
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === taskId) {
           const isComplete = percentage >= 100;
-          const updatedStatus = isComplete
-            ? 'completed'
-            : calculateTaskStatus(t.dueDate, t.estimatedHours, percentage, settings.personalVelocityMultiplier);
-
-          const updatedTask = {
-            ...t,
-            completionPercentage: percentage,
-            status: updatedStatus,
-            completedAt: isComplete ? new Date().toISOString() : t.completedAt
-          };
-
-          if (isComplete) {
-            setCompletedTaskForCelebration(updatedTask);
-            const updatedDebt = {
-              ...debt,
-              streakDays: debt.streakDays + 1,
-              compoundingScore: Math.max(10, debt.compoundingScore - 5)
-            };
-            setDebt(updatedDebt);
-            if (user?.id) {
-              saveUserDebt(user.id, updatedDebt);
-            }
-          }
-
-          if (user?.id) {
-            saveUserTask(user.id, updatedTask);
-          }
-
-          return updatedTask;
-        }
-        return t;
-      })
-    );
-  };
-
-  const completeTask = (taskId: string) => {
-    updateTaskProgress(taskId, 100);
-  };
-
-  const renegotiateTask = (taskId: string, newDueDate: string, reason: string) => {
-    let updatedTaskObj: Task | null = null;
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === taskId) {
-          const count = (t.renegotiatedCount || 0) + 1;
-          const newStatus = calculateTaskStatus(newDueDate, t.estimatedHours, t.completionPercentage, settings.personalVelocityMultiplier);
           const updated = {
             ...t,
-            dueDate: newDueDate,
-            renegotiatedCount: count,
-            lastRenegotiatedAt: new Date().toISOString(),
-            status: newStatus === 'too_late' ? 'tight' : newStatus
+            completionPercentage: percentage,
+            status: isComplete ? 'completed' : calculateTaskStatus(t.dueDate, t.estimatedHours, percentage, settings.personalVelocityMultiplier),
+            completedAt: isComplete ? new Date().toISOString() : t.completedAt
           };
-          updatedTaskObj = updated;
+          if (isComplete) setCompletedTaskForCelebration(updated);
+          if (user?.id) saveUserTask(user.id, updated);
           return updated;
         }
         return t;
       })
     );
-
-    if (updatedTaskObj && user?.id) {
-      saveUserTask(user.id, updatedTaskObj);
-    }
-
-    const newDebt = {
-      ...debt,
-      totalHoursBehind: debt.totalHoursBehind + 0.5,
-      compoundingScore: Math.min(100, debt.compoundingScore + 8)
-    };
-    setDebt(newDebt);
-    if (user?.id) {
-      saveUserDebt(user.id, newDebt);
-    }
-
-    showSuccess('Task schedule renegotiated. Doomsday Clock reset.');
   };
 
-  const deleteTask = (id: string) => {
+  const completeTask = (taskId: string) => updateTaskProgress(taskId, 100);
+
+  const renegotiateTask = async (taskId: string, newDueDate: string, reason: string) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === taskId) {
+          const updated = {
+            ...t,
+            dueDate: newDueDate,
+            renegotiatedCount: (t.renegotiatedCount || 0) + 1,
+            lastRenegotiatedAt: new Date().toISOString()
+          };
+          if (user?.id) saveUserTask(user.id, updated);
+          return updated;
+        }
+        return t;
+      })
+    );
+    showSuccess('Task schedule renegotiated.');
+  };
+
+  const deleteTask = async (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
-    showSuccess('Task removed.');
-
-    if (user?.id) {
-      deleteUserTask(user.id, id);
-    }
+    if (user?.id) await deleteUserTask(user.id, id);
   };
 
-  const logEvidence = (entryData: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => {
-    const newEntry: EvidenceEntry = {
-      ...entryData,
-      id: `ev-${Date.now()}`,
-      userId: user?.id,
-      dateLogged: new Date().toISOString()
-    };
+  const logEvidence = async (entryData: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => {
+    const newEntry: EvidenceEntry = { ...entryData, id: `ev-${Date.now()}`, dateLogged: new Date().toISOString() };
     setEvidenceEntries((prev) => [newEntry, ...prev]);
-    showSuccess('Outcome logged in Evidence Case File!');
-
-    if (user?.id) {
-      saveUserEvidence(user.id, newEntry);
-    }
+    if (user?.id) await saveUserEvidence(user.id, newEntry);
+    showSuccess('Outcome logged.');
   };
 
   const updateSettings = (newSettings: Partial<UserSettings>) => {
     setSettings((prev) => ({ ...prev, ...newSettings }));
-    showSuccess('Settings updated.');
-  };
-
-  const loadPersonaData = (personaId: string) => {
-    const bundle = PERSONAS_MAP[personaId] || defaultPersona;
-    setCurrentPersonaId(bundle.id);
-    setSlots(bundle.slots);
-    setTasks(bundle.tasks);
-    setEvidenceEntries(bundle.evidenceEntries);
-    setDebt(bundle.debt);
-    setSettings(bundle.settings);
-    showSuccess(`Loaded demo profile: ${bundle.name} (${bundle.role})`);
-  };
-
-  const loadSampleData = () => {
-    loadPersonaData('riya');
-  };
-
-  const resetAllData = () => {
-    setSlots([]);
-    setTasks([]);
-    setEvidenceEntries([]);
-    setDebt(emptyDebt);
-    showSuccess('All data reset.');
   };
 
   return (
     <RippleContext.Provider
       value={{
-        user,
-        session,
-        profile,
-        isLoadingAuth,
-        slots,
-        tasks,
-        evidenceEntries,
-        debt,
-        settings,
-        currentPersonaId,
-        activeTaskForPrediction,
-        activeFocusTask,
-        completedTaskForCelebration,
-        setActiveTaskForPrediction,
-        setActiveFocusTask,
-        setCompletedTaskForCelebration,
-        logout,
-        addSlot,
-        updateSlot,
-        deleteSlot,
-        addTask,
-        updateTaskProgress,
-        completeTask,
-        renegotiateTask,
-        deleteTask,
-        logEvidence,
-        updateSettings,
-        loadPersonaData,
-        loadSampleData,
-        resetAllData
+        user, session, profile, isLoadingAuth, slots, tasks, evidenceEntries, debt, settings,
+        activeTaskForPrediction, activeFocusTask, completedTaskForCelebration,
+        setActiveTaskForPrediction, setActiveFocusTask, setCompletedTaskForCelebration,
+        logout, addSlot, updateSlot, deleteSlot, addTask, updateTaskProgress,
+        completeTask, renegotiateTask, deleteTask, logEvidence, updateSettings
       }}
     >
       {children}
@@ -424,8 +255,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 export const useRipple = () => {
   const context = useContext(RippleContext);
-  if (!context) {
-    throw new Error('useRipple must be used within a RippleProvider');
-  }
+  if (!context) throw new Error('useRipple must be used within a RippleProvider');
   return context;
 };
