@@ -9,6 +9,7 @@ import {
 } from '@/types/ripple';
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { showSuccess, showError } from '@/utils/toast';
+import { ALL_PERSONAS, PERSONAS_MAP, FullPersonaBundle } from '@/data/ripplePersonaData';
 
 interface RippleContextType {
   slots: TimetableSlot[];
@@ -16,6 +17,7 @@ interface RippleContextType {
   evidenceEntries: EvidenceEntry[];
   debt: ProcrastinationDebt;
   settings: UserSettings;
+  currentPersonaId: string;
   activeTaskForPrediction: Task | null;
   activeFocusTask: Task | null;
   completedTaskForCelebration: Task | null;
@@ -41,172 +43,13 @@ interface RippleContextType {
   // Settings
   updateSettings: (newSettings: Partial<UserSettings>) => void;
   
-  // Utility action
+  // Persona actions
+  loadPersonaData: (personaId: string) => void;
   loadSampleData: () => void;
   resetAllData: () => void;
 }
 
-const defaultSettings: UserSettings = {
-  intensityMode: 'standard',
-  isMinorProfile: false,
-  weeklyDigestOnly: false,
-  personalVelocityMultiplier: 1.15
-};
-
-const initialSampleSlots: TimetableSlot[] = [
-  {
-    id: 'slot-1',
-    subject: 'Physics',
-    dayOfWeek: 'Monday',
-    startTime: '08:30',
-    endTime: '09:45',
-    room: 'Lab 204',
-    teacherName: 'Dr. Sharma',
-    strictnessTag: 'COLD_CALL',
-    stakesTag: 'LAB_PRACTICAL',
-    weight: 35,
-    notes: 'Always checks numerical problem sets before class starts.'
-  },
-  {
-    id: 'slot-2',
-    subject: 'Chemistry',
-    dayOfWeek: 'Tuesday',
-    startTime: '10:00',
-    endTime: '11:15',
-    room: 'Hall 102',
-    teacherName: 'Prof. Mukherjee',
-    strictnessTag: 'NOTEBOOK_CHECK',
-    stakesTag: 'NOTEBOOK_COPY',
-    weight: 25,
-    notes: 'Demands neat handwritten diagrams.'
-  },
-  {
-    id: 'slot-3',
-    subject: 'Mathematics',
-    dayOfWeek: 'Wednesday',
-    startTime: '11:30',
-    endTime: '12:45',
-    room: 'Room 305',
-    teacherName: 'Mrs. Verma',
-    strictnessTag: 'PUBLIC_SCOLD',
-    stakesTag: 'GRADED_QUIZ',
-    weight: 40,
-    notes: 'Calls out unsubmitted calculus sheets in front of the batch.'
-  },
-  {
-    id: 'slot-4',
-    subject: 'English Literature',
-    dayOfWeek: 'Thursday',
-    startTime: '09:00',
-    endTime: '10:15',
-    room: 'Auditorium B',
-    teacherName: 'Mr. Kapoor',
-    strictnessTag: 'ATTENDANCE_STRICT',
-    stakesTag: 'PRESENTATION',
-    weight: 20,
-    notes: 'Door locked exactly at 9:00 AM.'
-  }
-];
-
-const now = new Date();
-const hoursFromNow = (h: number) => new Date(now.getTime() + h * 3600 * 1000).toISOString();
-const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600 * 1000).toISOString();
-
-const initialSampleTasks: Task[] = [
-  {
-    id: 'task-1',
-    title: 'Physics Wave Optics Lab Problem Set',
-    description: 'Solve 12 numericals on double-slit interference and write error analysis.',
-    slotId: 'slot-1',
-    dueDate: hoursFromNow(2.5),
-    estimatedHours: 2.0,
-    completionPercentage: 20,
-    taskType: 'problem_set',
-    status: 'critical',
-    createdAt: hoursAgo(20)
-  },
-  {
-    id: 'task-2',
-    title: 'Chemistry Electrochemistry Diagram & Equations',
-    description: 'Complete galvanic cell diagram and reduction potential practice calculations.',
-    slotId: 'slot-2',
-    dueDate: hoursFromNow(18),
-    estimatedHours: 1.5,
-    completionPercentage: 50,
-    taskType: 'lab_report',
-    status: 'tight',
-    createdAt: hoursAgo(12)
-  },
-  {
-    id: 'task-3',
-    title: 'Calculus Integration Limits Revision Sheet',
-    description: 'Definite integrals and substitution method homework problems 1 to 25.',
-    slotId: 'slot-3',
-    dueDate: hoursFromNow(48),
-    estimatedHours: 3.0,
-    completionPercentage: 0,
-    taskType: 'revision',
-    status: 'manageable',
-    createdAt: hoursAgo(5)
-  },
-  {
-    id: 'task-4',
-    title: 'English Hamlet Theme Analysis Essay',
-    description: '1,200-word critical analysis on madness vs feigned madness in Act III.',
-    slotId: 'slot-4',
-    dueDate: hoursAgo(2),
-    estimatedHours: 2.5,
-    completionPercentage: 40,
-    taskType: 'essay',
-    status: 'too_late',
-    createdAt: hoursAgo(30)
-  }
-];
-
-const initialSampleEvidence: EvidenceEntry[] = [
-  {
-    id: 'ev-1',
-    taskId: 'hist-1',
-    taskTitle: 'Organic Chemistry Reaction Mechanisms',
-    subject: 'Chemistry',
-    teacherName: 'Prof. Mukherjee',
-    predictedScenario: 'Notebook check failure would lead to zero copy marks and stern warning.',
-    actualOutcome: 'Got pulled aside, lost 5 marks on internal notebook evaluation.',
-    wasOnTime: false,
-    accuracyRating: 5,
-    dateLogged: hoursAgo(72),
-    userNotes: 'Prediction was 100% accurate. Should not have delayed till 2 AM.'
-  },
-  {
-    id: 'ev-2',
-    taskId: 'hist-2',
-    taskTitle: 'Physics Kinematics Numerical Sheet',
-    subject: 'Physics',
-    teacherName: 'Dr. Sharma',
-    predictedScenario: 'Cold-call in class; inability to present solution.',
-    actualOutcome: 'Finished on time! Doctor Sharma checked and praised neat vector diagrams.',
-    wasOnTime: true,
-    accuracyRating: 4,
-    dateLogged: hoursAgo(120),
-    userNotes: 'Felt confident answering in class when called upon.'
-  }
-];
-
-const initialDebt: ProcrastinationDebt = {
-  totalHoursBehind: 4.5,
-  missedDeadlinesCount: 2,
-  streakDays: 3,
-  compoundingScore: 68,
-  weeklyDebtTrend: [
-    { day: 'Mon', debtHours: 1.5 },
-    { day: 'Tue', debtHours: 2.0 },
-    { day: 'Wed', debtHours: 1.0 },
-    { day: 'Thu', debtHours: 3.5 },
-    { day: 'Fri', debtHours: 4.5 },
-    { day: 'Sat', debtHours: 4.0 },
-    { day: 'Sun', debtHours: 4.5 }
-  ]
-};
+const defaultPersona = PERSONAS_MAP['riya'];
 
 function safeGetLocalStorage<T>(key: string, fallback: T): T {
   try {
@@ -229,24 +72,28 @@ function safeSetLocalStorage<T>(key: string, value: T): void {
 const RippleContext = createContext<RippleContextType | undefined>(undefined);
 
 export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentPersonaId, setCurrentPersonaId] = useState<string>(() =>
+    safeGetLocalStorage('ripple_persona_id', 'riya')
+  );
+
   const [slots, setSlots] = useState<TimetableSlot[]>(() => 
-    safeGetLocalStorage('ripple_slots', initialSampleSlots)
+    safeGetLocalStorage('ripple_slots', defaultPersona.slots)
   );
 
   const [tasks, setTasks] = useState<Task[]>(() => 
-    safeGetLocalStorage('ripple_tasks', initialSampleTasks)
+    safeGetLocalStorage('ripple_tasks', defaultPersona.tasks)
   );
 
   const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>(() => 
-    safeGetLocalStorage('ripple_evidence', initialSampleEvidence)
+    safeGetLocalStorage('ripple_evidence', defaultPersona.evidenceEntries)
   );
 
   const [debt, setDebt] = useState<ProcrastinationDebt>(() => 
-    safeGetLocalStorage('ripple_debt', initialDebt)
+    safeGetLocalStorage('ripple_debt', defaultPersona.debt)
   );
 
   const [settings, setSettings] = useState<UserSettings>(() => 
-    safeGetLocalStorage('ripple_settings', defaultSettings)
+    safeGetLocalStorage('ripple_settings', defaultPersona.settings)
   );
 
   const [activeTaskForPrediction, setActiveTaskForPrediction] = useState<Task | null>(null);
@@ -254,6 +101,10 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
 
   // Sync to LocalStorage
+  useEffect(() => {
+    safeSetLocalStorage('ripple_persona_id', currentPersonaId);
+  }, [currentPersonaId]);
+
   useEffect(() => {
     safeSetLocalStorage('ripple_slots', slots);
   }, [slots]);
@@ -411,13 +262,19 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showSuccess('Settings updated.');
   };
 
+  const loadPersonaData = (personaId: string) => {
+    const bundle = PERSONAS_MAP[personaId] || defaultPersona;
+    setCurrentPersonaId(bundle.id);
+    setSlots(bundle.slots);
+    setTasks(bundle.tasks);
+    setEvidenceEntries(bundle.evidenceEntries);
+    setDebt(bundle.debt);
+    setSettings(bundle.settings);
+    showSuccess(`Loaded demo persona: ${bundle.name} (${bundle.role})`);
+  };
+
   const loadSampleData = () => {
-    setSlots(initialSampleSlots);
-    setTasks(initialSampleTasks);
-    setEvidenceEntries(initialSampleEvidence);
-    setDebt(initialDebt);
-    setSettings(defaultSettings);
-    showSuccess('Loaded sample data (Riya - Class 11 Student profile)');
+    loadPersonaData('riya');
   };
 
   const resetAllData = () => {
@@ -442,6 +299,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         evidenceEntries,
         debt,
         settings,
+        currentPersonaId,
         activeTaskForPrediction,
         activeFocusTask,
         completedTaskForCelebration,
@@ -458,6 +316,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteTask,
         logEvidence,
         updateSettings,
+        loadPersonaData,
         loadSampleData,
         resetAllData
       }}
