@@ -3,14 +3,13 @@ import { useRipple } from '@/context/RippleContext';
 import { TaskCard } from './TaskCard';
 import { Task } from '@/types/ripple';
 import { 
-  AlertTriangle, 
   Clock, 
-  Filter, 
   Flame, 
   Plus, 
-  Sparkles, 
   ShieldAlert,
-  Search
+  Search,
+  Sparkles,
+  Calendar
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,12 +19,14 @@ interface WarRoomProps {
   onOpenPrediction: (task: Task) => void;
   onOpenFocus: (task: Task) => void;
   onOpenNewTaskModal: () => void;
+  onGoToTimetable?: () => void;
 }
 
 export const WarRoom: React.FC<WarRoomProps> = ({
   onOpenPrediction,
   onOpenFocus,
-  onOpenNewTaskModal
+  onOpenNewTaskModal,
+  onGoToTimetable
 }) => {
   const { tasks, slots, debt } = useRipple();
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -39,7 +40,6 @@ export const WarRoom: React.FC<WarRoomProps> = ({
     return t.status === filterStatus && matchesSearch;
   });
 
-  // Critical tasks needing immediate action
   const criticalCount = tasks.filter((t) => t.status === 'critical' || t.status === 'too_late').length;
 
   return (
@@ -75,6 +75,30 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             <Flame className="w-4 h-4 text-amber-300 fill-amber-300" />
             Inspect Critical Forecast
           </Button>
+        </div>
+      )}
+
+      {/* Zero Slots Onboarding Warning */}
+      {slots.length === 0 && (
+        <div className="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Calendar className="w-5 h-5 text-indigo-400 shrink-0" />
+            <div>
+              <h3 className="text-sm font-bold text-white">No timetable slots configured yet</h3>
+              <p className="text-xs text-slate-300">
+                Add your classes or client meeting slots to enable strictness & consequence AI predictions.
+              </p>
+            </div>
+          </div>
+          {onGoToTimetable && (
+            <Button
+              size="sm"
+              onClick={onGoToTimetable}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shrink-0"
+            >
+              Add First Timetable Slot
+            </Button>
+          )}
         </div>
       )}
 
@@ -135,9 +159,9 @@ export const WarRoom: React.FC<WarRoomProps> = ({
           <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
             <Clock className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-white">No active tasks in this view</h3>
+          <h3 className="text-base font-bold text-white">Your War Room is clear</h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            You are currently clear of impending consequence alerts. Click below to add a new task tied to your schedule.
+            You currently have no pending tasks. Add your first task tied to a timetable slot to begin tracking doomsday buffers.
           </p>
           <Button
             size="sm"
@@ -145,7 +169,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             className="bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs gap-1.5 mt-2"
           >
             <Plus className="w-4 h-4" />
-            Add New Task
+            Add First Task
           </Button>
         </div>
       )}

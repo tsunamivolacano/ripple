@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { RippleProvider, useRipple } from '@/context/RippleContext';
+import React, { useState, useEffect } from 'react';
+import { useRipple } from '@/context/RippleContext';
 import { Navbar } from '@/components/header/Navbar';
 import { WarRoom } from '@/components/doomsday/WarRoom';
 import { PredictionView } from '@/components/prediction/PredictionView';
@@ -13,7 +13,11 @@ import { NewTaskModal } from '@/components/task/NewTaskModal';
 import { Task } from '@/types/ripple';
 import { MadeWithDyad } from '@/components/made-with-dyad';
 
-const RippleAppContent: React.FC = () => {
+interface IndexProps {
+  initialTab?: string;
+}
+
+export default function Index({ initialTab = 'warroom' }: IndexProps) {
   const {
     activeTaskForPrediction,
     activeFocusTask,
@@ -23,9 +27,15 @@ const RippleAppContent: React.FC = () => {
     setCompletedTaskForCelebration
   } = useRipple();
 
-  const [activeTab, setActiveTab] = useState('warroom');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [renegotiateTask, setRenegotiateTask] = useState<Task | null>(null);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white">
@@ -43,6 +53,7 @@ const RippleAppContent: React.FC = () => {
             onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
             onOpenFocus={(t) => setActiveFocusTask(t)}
             onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+            onGoToTimetable={() => setActiveTab('timetable')}
           />
         )}
 
@@ -86,13 +97,5 @@ const RippleAppContent: React.FC = () => {
         onClose={() => setIsNewTaskModalOpen(false)}
       />
     </div>
-  );
-};
-
-export default function Index() {
-  return (
-    <RippleProvider>
-      <RippleAppContent />
-    </RippleProvider>
   );
 }
