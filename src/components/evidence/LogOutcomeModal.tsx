@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRipple } from '@/context/RippleContext';
-import { FileText, CheckCircle2, Star } from 'lucide-react';
+import { FileText, Star } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,11 +15,17 @@ interface LogOutcomeModalProps {
 export const LogOutcomeModal: React.FC<LogOutcomeModalProps> = ({ isOpen, onClose }) => {
   const { logEvidence, tasks, slots } = useRipple();
 
-  const [selectedTaskId, setSelectedTaskId] = useState(tasks[0]?.id || '');
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [actualOutcome, setActualOutcome] = useState('');
   const [wasOnTime, setWasOnTime] = useState(true);
   const [accuracyRating, setAccuracyRating] = useState(5);
   const [userNotes, setUserNotes] = useState('');
+
+  useEffect(() => {
+    if (tasks.length > 0 && !selectedTaskId) {
+      setSelectedTaskId(tasks[0].id);
+    }
+  }, [tasks, selectedTaskId]);
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
   const slot = slots.find((s) => s.id === selectedTask?.slotId);
@@ -32,7 +38,7 @@ export const LogOutcomeModal: React.FC<LogOutcomeModalProps> = ({ isOpen, onClos
       taskId: selectedTask.id,
       taskTitle: selectedTask.title,
       subject: slot?.subject || 'General',
-      teacherName: slot?.teacherName || 'Unknown Instructor',
+      teacherName: slot?.teacherName || 'Instructor',
       predictedScenario: `Forecasted consequence for ${selectedTask.taskType} submission under ${slot?.teacherName || 'teacher'}.`,
       actualOutcome: actualOutcome || 'Completed and handed in.',
       wasOnTime,
@@ -54,7 +60,7 @@ export const LogOutcomeModal: React.FC<LogOutcomeModalProps> = ({ isOpen, onClos
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 my-2">
-          {tasks.length > 0 && (
+          {tasks.length > 0 ? (
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-300">Select Task</label>
               <Select value={selectedTaskId} onValueChange={setSelectedTaskId}>
@@ -68,6 +74,10 @@ export const LogOutcomeModal: React.FC<LogOutcomeModalProps> = ({ isOpen, onClos
                 </SelectContent>
               </Select>
             </div>
+          ) : (
+            <p className="text-xs text-slate-400">
+              No tasks currently registered. Add a task to link case outcomes.
+            </p>
           )}
 
           <div className="space-y-1">
@@ -147,7 +157,7 @@ export const LogOutcomeModal: React.FC<LogOutcomeModalProps> = ({ isOpen, onClos
             <Button type="button" variant="ghost" onClick={onClose} className="text-slate-400 hover:text-white text-xs">
               Cancel
             </Button>
-            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs">
+            <Button type="submit" disabled={!selectedTask} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs">
               Save Case File Entry
             </Button>
           </div>
