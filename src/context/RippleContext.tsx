@@ -1,3 +1,5 @@
+"use client";
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +13,6 @@ import {
 } from '@/types/ripple';
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { showSuccess, showError } from '@/utils/toast';
-import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { 
   fetchProfile, 
   fetchUserSlots, 
@@ -22,8 +23,7 @@ import {
   deleteUserTask, 
   fetchUserEvidence, 
   saveUserEvidence, 
-  fetchUserDebt, 
-  saveUserDebt 
+  fetchUserDebt 
 } from '@/integrations/supabase/db';
 
 interface RippleContextType {
@@ -91,81 +91,92 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadUserDataFromSupabase(session.user.id);
-      } else {
+    let mounted = true;
+
+    async function initAuth() {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        if (mounted) {
+          setSession(initialSession);
+          setUser(initialSession?.user ?? null);
+          if (initialSession?.user) {
+            await loadUserDataFromSupabase(initialSession.user.id);
+          }
+        }
+      } catch (err) {
+        console.error("Auth init error:", err);
+      } finally {
+        if (mounted) setIsLoadingAuth(false);
+      }
+    }
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (mounted) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await loadUserDataFromSupabase(session.user.id);
+        } else if (event === 'SIGNED_OUT') {
+          setProfile(null);
+          setSlots([]);
+          setTasks([]);
+          setEvidenceEntries([]);
+          setDebt(emptyDebt);
+        }
         setIsLoadingAuth(false);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await loadUserDataFromSupabase(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
-        setProfile(null);
-        setSlots([]);
-        setTasks([]);
-        setEvidenceEntries([]);
-        setDebt(emptyDebt);
-      }
-      setIsLoadingAuth(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadUserDataFromSupabase = async (userId: string) => {
-    setIsLoadingAuth(true);
     try {
-      const userProfile = await fetchProfile(userId);
-      setProfile(userProfile);
-
-      if (userProfile?.intensityMode) {
-        setSettings((prev) => ({ ...prev, intensityMode: userProfile.intensityMode }));
-      }
-
-      const [dbSlots, dbTasks, dbEvidence, dbDebt] = await Promise.all([
+      const [userProfile, dbSlots, dbTasks, dbEvidence, dbDebt] = await Promise.all([
+        fetchProfile(userId),
         fetchUserSlots(userId),
         fetchUserTasks(userId),
         fetchUserEvidence(userId),
         fetchUserDebt(userId)
       ]);
 
+      setProfile(userProfile);
+      if (userProfile?.intensityMode) {
+        setSettings(prev => ({ ...prev, intensityMode: userProfile.intensityMode }));
+      }
       setSlots(dbSlots);
       setTasks(dbTasks);
       setEvidenceEntries(dbEvidence);
       setDebt(dbDebt || emptyDebt);
     } catch (err) {
-      console.error("Supabase load error:", err);
-    } finally {
-      setIsLoadingAuth(false);
+      console.error("Data load error:", err);
     }
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
-    showSuccess("Logged out successfully.");
+    showSuccess("Logged out.");
   };
 
   const addSlot = async (slotData: Omit<TimetableSlot, 'id'>) => {
     const newSlot: TimetableSlot = { ...slotData, id: `slot-${Date.now()}` };
-    setSlots((prev) => [...prev, newSlot]);
+    setSlots(prev => [...prev, newSlot]);
     if (user?.id) await saveUserSlot(user.id, newSlot);
-    showSuccess(`Slot for ${newSlot.subject} saved.`);
+    showSuccess(`${newSlot.subject} added.`);
   };
 
   const updateSlot = async (updatedSlot: TimetableSlot) => {
-    setSlots((prev) => prev.map((s) => (s.id === updatedSlot.id ? updatedSlot : s)));
+    setSlots(prev => prev.map(s => (s.id === updatedSlot.id ? updatedSlot : s)));
     if (user?.id) await saveUserSlot(user.id, updatedSlot);
   };
 
   const deleteSlot = async (id: string) => {
-    setSlots((prev) => prev.filter((s) => s.id !== id));
+    setSlots(prev => prev.filter(s => s.id !== id));
     if (user?.id) await deleteUserSlot(user.id, id);
   };
 
@@ -176,14 +187,14 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       createdAt: new Date().toISOString(),
       status: calculateTaskStatus(taskData.dueDate, taskData.estimatedHours, taskData.completionPercentage, settings.personalVelocityMultiplier)
     };
-    setTasks((prev) => [newTask, ...prev]);
+    setTasks(prev => [newTask, ...prev]);
     if (user?.id) await saveUserTask(user.id, newTask);
-    showSuccess(`Task "${newTask.title}" created.`);
+    showSuccess(`Task "${newTask.title}" set.`);
   };
 
   const updateTaskProgress = async (taskId: string, percentage: number) => {
-    setTasks((prev) =>
-      prev.map((t) => {
+    setTasks(prev =>
+      prev.map(t => {
         if (t.id === taskId) {
           const isComplete = percentage >= 100;
           const updated = {
@@ -192,9 +203,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             status: isComplete ? 'completed' : calculateTaskStatus(t.dueDate, t.estimatedHours, percentage, settings.personalVelocityMultiplier),
             completedAt: isComplete ? new Date().toISOString() : t.completedAt
           };
-          if (isComplete) setCompletedTaskForCelebration(updated);
-          if (user?.id) saveUserTask(user.id, updated);
-          return updated;
+          if (isComplete) setCompletedTaskForCelebration(updated as Task);
+          if (user?.id) saveUserTask(user.id, updated as Task);
+          return updated as Task;
         }
         return t;
       })
@@ -204,8 +215,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const completeTask = (taskId: string) => updateTaskProgress(taskId, 100);
 
   const renegotiateTask = async (taskId: string, newDueDate: string, reason: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
+    setTasks(prev =>
+      prev.map(t => {
         if (t.id === taskId) {
           const updated = {
             ...t,
@@ -213,29 +224,29 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             renegotiatedCount: (t.renegotiatedCount || 0) + 1,
             lastRenegotiatedAt: new Date().toISOString()
           };
-          if (user?.id) saveUserTask(user.id, updated);
-          return updated;
+          if (user?.id) saveUserTask(user.id, updated as Task);
+          return updated as Task;
         }
         return t;
       })
     );
-    showSuccess('Task schedule renegotiated.');
+    showSuccess('Schedule updated.');
   };
 
   const deleteTask = async (id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+    setTasks(prev => prev.filter(t => t.id !== id));
     if (user?.id) await deleteUserTask(user.id, id);
   };
 
   const logEvidence = async (entryData: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => {
     const newEntry: EvidenceEntry = { ...entryData, id: `ev-${Date.now()}`, dateLogged: new Date().toISOString() };
-    setEvidenceEntries((prev) => [newEntry, ...prev]);
+    setEvidenceEntries(prev => [newEntry, ...prev]);
     if (user?.id) await saveUserEvidence(user.id, newEntry);
     showSuccess('Outcome logged.');
   };
 
   const updateSettings = (newSettings: Partial<UserSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+    setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
   return (
