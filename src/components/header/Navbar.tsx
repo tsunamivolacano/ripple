@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { IntensitySelector } from './IntensitySelector';
 import { useRipple } from '@/context/RippleContext';
 import { 
@@ -9,8 +8,8 @@ import {
   FileText, 
   TrendingDown, 
   Plus, 
-  LogOut,
-  User
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,13 +21,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const navigate = useNavigate();
-  const { user, debt, logout } = useRipple();
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
+  const { debt, loadSampleData } = useRipple();
 
   const navItems = [
     { id: 'warroom', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
@@ -62,15 +55,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
           </div>
 
           {/* Quick Action Center */}
-          <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3">
             <IntensitySelector />
-
-            {user && (
-              <div className="hidden sm:flex items-center gap-2 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
-                <User className="w-3.5 h-3.5 text-rose-400" />
-                <span className="text-slate-300 truncate max-w-[140px] font-medium">{user.email}</span>
-              </div>
-            )}
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadSampleData}
+              className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-300 gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              Load Sample (Riya)
+            </Button>
 
             <Button
               size="sm"
@@ -79,17 +75,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
             >
               <Plus className="w-4 h-4" />
               New Task
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-400 hover:text-white gap-1.5"
-              title="Log Out"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Log Out</span>
             </Button>
           </div>
         </div>
