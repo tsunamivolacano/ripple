@@ -11,6 +11,7 @@ import {
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { showSuccess, showError } from '@/utils/toast';
 import { User } from '@supabase/supabase-js';
+import { ALL_PERSONAS, PERSONAS_MAP } from '@/data/ripplePersonaData';
 
 interface RippleContextType {
   user: User | null;
@@ -48,6 +49,7 @@ interface RippleContextType {
   
   // Auth
   signOut: () => Promise<void>;
+  seedDemoPersona: (demoKey: 'riya' | 'aman' | 'kabir') => Promise<void>;
 }
 
 const defaultSettings: UserSettings = {
@@ -116,7 +118,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserData(session.user.id);
+        fetchUserData(session.user);
       } else {
         setLoading(false);
       }
@@ -125,7 +127,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserData(session.user.id);
+        fetchUserData(session.user);
       } else {
         setSlots([]);
         setTasks([]);
@@ -138,30 +140,146 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserData = async (userId: string) => {
-    setLoading(true);
+  const seedDemoDataForUser = async (userId: string, demoKey: 'riya' | 'aman' | 'kabir') => {
+    const bundle = PERSONAS_MAP[demoKey];
+    if (!bundle) return;
 
     try {
+      // 1. Profile
+      await supabase.from('profiles').upsert({
+        id: userId,
+        name: bundle.name,
+        role: bundle.role
+      });
+
+      // 2. Settings
+      await supabase.from('user_settings').upsert({
+        user_id: userId,
+        intensity_mode: bundle.settings.intensityMode,
+        is_minor_profile: bundle.settings.isMinorProfile,
+        weekly_digest_only: bundle.settings.weeklyDigestOnly,
+        personal_velocity_multiplier: bundle.settings.personalVelocityMultiplier
+      });
+
+      // 3. Timetable Slots
+      const slotMap = new Map<string, string>(); // oldSlotId -> newSlotDbId
+      for (const slot of bundle.slots) {
+        const { data: slotRes } = await supabase
+          .from('timetable_slots')
+          .insert({
+            user_id: userId,
+            subject: slot.subject,
+            day_of_week: slot.dayOfWeek,
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+            room: slot.room,
+            teacher_name: slot.teacherName,
+            strictness_tag: slot.strictnessTag,
+            stakes_tag: slot.stakesTag,
+            weight: slot.weight,
+            notes: slot.notes
+          })
+          .select()
+          .single();
+
+        if (slotRes) {
+          slotMap.set(slot.id, slotRes.id);
+        }
+      }
+
+      // 4. Tasks
+      for (const task of bundle.tasks) {
+        const mappedSlotId = task.slotId ? slotMap.get(task.slotId) || null : null;
+        await supabase.from('tasks').insert({
+          user_id: userId,
+          title: task.title,
+          description: task.description,
+          slot_id: mappedSlotId,
+          due_date: task.dueDate,
+          estimated_hours: task.estimatedHours,
+          completion_percentage: task.completionPercentage,
+          task_type: task.taskType,
+          status: task.status
+        });
+      }
+
+      // 5. Evidence Log
+      for (const ev of bundle.evidenceEntries) {
+        await supabase.from('evidence_log').insert({
+          user_id: userId,
+          task_title: ev.taskTitle,
+          subject: ev.subject,
+          teacher_name: ev.teacherName,
+          predicted_scenario: ev.predictedScenario,
+          actual_outcome: ev.actualOutcome,
+          was_on_time: ev.wasOnTime,
+          accuracy_rating: ev.accuracyRating,
+          user_notes: ev.userNotes
+        });
+      }
+    } catch (e) {
+      console.error('Error seeding demo persona data:', e);
+    }
+  };
+
+  const fetchUserData = async (currentUser: User) => {
+    setLoading(true);
+    const userId = currentUser.id;
+
+    try {
+      // Check if email matches demo persona
+      const userEmail = currentUser.email || '';
+      let demoKey: 'riya' | 'aman' | 'kabir' | null = null;
+      if (userEmail.includes('riya')) demoKey = 'riya';
+      else if (userEmail.includes('aman')) demoKey = 'aman';
+      else if (userEmail.includes('kabir')) demoKey = 'kabir';
+
       // 1. Fetch Profile
-      const { data: profData } = await supabase
+      let { data: profData } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
+
+      // 2. Fetch Slots
+      let { data: slotsData } = await supabase
+        .from('timetable_slots')
+        .select('*')
+        .eq('user_id', userId);
+
+      // If user is demo and slots are empty, seed data first
+      if (demoKey && (!slotsData || slotsData.length === 0)) {
+        await seedDemoDataForUser(userId, demoKey);
+        
+        // Refetch after seeding
+        const { data: pData } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+        profData = pData;
+        const { data: sData } = await supabase.from('timetable_slots').select('*').eq('user_id', userId);
+        slotsData = sData;
+      }
+
       if (profData) {
         setProfile({
           id: profData.id,
           name: profData.name || 'User',
           role: profData.role || 'student'
         });
+      } else {
+        const demoBundle = demoKey ? PERSONAS_MAP[demoKey] : null;
+        setProfile({
+          id: userId,
+          name: demoBundle ? demoBundle.name : currentUser.user_metadata?.name || 'User',
+          role: demoBundle ? demoBundle.role : currentUser.user_metadata?.role || 'student'
+        });
       }
 
-      // 2. Fetch User Settings
+      // 3. Fetch User Settings
       const { data: setData } = await supabase
         .from('user_settings')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+
       if (setData) {
         setSettings({
           intensityMode: setData.intensity_mode || 'standard',
@@ -169,15 +287,12 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           weeklyDigestOnly: setData.weekly_digest_only || false,
           personalVelocityMultiplier: Number(setData.personal_velocity_multiplier) || 1.0
         });
+      } else if (demoKey) {
+        setSettings(PERSONAS_MAP[demoKey].settings);
       }
 
-      // 3. Fetch Timetable Slots
-      const { data: slotsData } = await supabase
-        .from('timetable_slots')
-        .select('*')
-        .eq('user_id', userId);
-
-      if (slotsData) {
+      // 4. Hydrate Slots
+      if (slotsData && slotsData.length > 0) {
         setSlots(
           slotsData.map((s) => ({
             id: s.id,
@@ -194,17 +309,19 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             notes: s.notes
           }))
         );
+      } else if (demoKey) {
+        setSlots(PERSONAS_MAP[demoKey].slots);
       } else {
         setSlots([]);
       }
 
-      // 4. Fetch Tasks
+      // 5. Fetch Tasks
       const { data: tasksData } = await supabase
         .from('tasks')
         .select('*')
         .eq('user_id', userId);
 
-      if (tasksData) {
+      if (tasksData && tasksData.length > 0) {
         setTasks(
           tasksData.map((t) => {
             const computedStatus = calculateTaskStatus(
@@ -231,17 +348,19 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             };
           })
         );
+      } else if (demoKey) {
+        setTasks(PERSONAS_MAP[demoKey].tasks);
       } else {
         setTasks([]);
       }
 
-      // 5. Fetch Evidence Log
+      // 6. Fetch Evidence Log
       const { data: evData } = await supabase
         .from('evidence_log')
         .select('*')
         .eq('user_id', userId);
 
-      if (evData) {
+      if (evData && evData.length > 0) {
         setEvidenceEntries(
           evData.map((e) => ({
             id: e.id,
@@ -258,6 +377,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             userNotes: e.user_notes
           }))
         );
+      } else if (demoKey) {
+        setEvidenceEntries(PERSONAS_MAP[demoKey].evidenceEntries);
       } else {
         setEvidenceEntries([]);
       }
@@ -265,6 +386,13 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('Error fetching Supabase user data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const seedDemoPersona = async (demoKey: 'riya' | 'aman' | 'kabir') => {
+    if (user) {
+      await seedDemoDataForUser(user.id, demoKey);
+      await fetchUserData(user);
     }
   };
 
@@ -594,7 +722,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteTask,
         logEvidence,
         updateSettings,
-        signOut
+        signOut,
+        seedDemoPersona
       }}
     >
       {children}

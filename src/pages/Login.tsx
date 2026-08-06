@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
+import { useRipple } from '@/context/RippleContext';
 import { Zap, ArrowRight, ShieldCheck, UserCheck, Flame, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,7 @@ import { Label } from '@/components/ui/label';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { seedDemoPersona } = useRipple();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,91 +41,51 @@ export const Login: React.FC = () => {
 
   const handleDemoLogin = async (demoKey: 'riya' | 'aman' | 'kabir') => {
     setLoading(true);
-    const demoEmails = {
-      riya: 'riya.demo@ripple.app',
-      aman: 'aman.demo@ripple.app',
-      kabir: 'kabir.demo@ripple.app'
-    };
-    const demoPasswords = {
-      riya: 'Riya@2026',
-      aman: 'Aman@2026',
-      kabir: 'Kabir@2026'
-    };
+    const persona = PERSONAS_MAP[demoKey];
+    const demoEmail = `${demoKey}.demo@ripple.app`;
+    const demoPassword = `${demoKey.charAt(0).toUpperCase() + demoKey.slice(1)}@2026`;
 
-    const demoEmail = demoEmails[demoKey];
-    const demoPassword = demoPasswords[demoKey];
-
-    // Try signing in
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: demoEmail,
-      password: demoPassword
-    });
-
-    if (error) {
-      // If user doesn't exist yet, auto sign-up demo user
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    try {
+      // Attempt Sign In
+      let { data, error } = await supabase.auth.signInWithPassword({
         email: demoEmail,
-        password: demoPassword,
-        options: {
-          data: {
-            name: PERSONAS_MAP[demoKey].name,
-            role: PERSONAS_MAP[demoKey].role
-          }
-        }
+        password: demoPassword
       });
 
-      if (signUpError) {
-        showError(`Demo Login failed: ${signUpError.message}`);
-        setLoading(false);
-        return;
+      // If user doesn't exist yet, sign up
+      if (error) {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: demoEmail,
+          password: demoPassword,
+          options: {
+            data: {
+              name: persona.name,
+              role: persona.role
+            }
+          }
+        });
+
+        if (signUpError) {
+          showError(`Demo Login error: ${signUpError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        data = signUpData as any;
       }
 
-      if (signUpData.user) {
-        // Seed demo data into Supabase
-        const bundle = PERSONAS_MAP[demoKey];
-        const userId = signUpData.user.id;
-
-        // Insert slots
-        const slotsToInsert = bundle.slots.map((s) => ({
-          user_id: userId,
-          subject: s.subject,
-          day_of_week: s.dayOfWeek,
-          start_time: s.startTime,
-          end_time: s.endTime,
-          room: s.room,
-          teacher_name: s.teacherName,
-          strictness_tag: s.strictnessTag,
-          stakes_tag: s.stakesTag,
-          weight: s.weight,
-          notes: s.notes
-        }));
-        await supabase.from('timetable_slots').insert(slotsToInsert);
-
-        // Insert settings
-        await supabase.from('user_settings').upsert({
-          user_id: userId,
-          intensity_mode: bundle.settings.intensityMode,
-          is_minor_profile: bundle.settings.isMinorProfile,
-          weekly_digest_only: bundle.settings.weeklyDigestOnly,
-          personal_velocity_multiplier: bundle.settings.personalVelocityMultiplier
-        });
-
-        // Insert profile
-        await supabase.from('profiles').upsert({
-          id: userId,
-          name: bundle.name,
-          role: bundle.role
-        });
-
-        showSuccess(`Welcome! Logged in as ${bundle.name}`);
+      if (data?.session || data?.user) {
+        showSuccess(`Welcome! Logged in as ${persona.name}`);
+        navigate('/');
+      } else {
+        showSuccess(`Logged in as ${persona.name}`);
         navigate('/');
       }
-    } else if (data.session) {
-      showSuccess(`Logged in as ${PERSONAS_MAP[demoKey].name}`);
-      navigate('/');
+    } catch (e: any) {
+      showError(e?.message || 'Error signing in to demo persona');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -196,7 +158,7 @@ export const Login: React.FC = () => {
                 type="button"
                 onClick={() => handleDemoLogin('riya')}
                 disabled={loading}
-                className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 hover:border-rose-500/60 transition-all text-left space-y-1 group"
+                className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 hover:border-rose-500/60 transition-all text-left space-y-1 group disabled:opacity-50"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-base">🎓</span>
@@ -210,7 +172,7 @@ export const Login: React.FC = () => {
                 type="button"
                 onClick={() => handleDemoLogin('aman')}
                 disabled={loading}
-                className="p-2.5 rounded-xl bg-blue-950/40 border border-blue-500/30 hover:border-blue-500/60 transition-all text-left space-y-1 group"
+                className="p-2.5 rounded-xl bg-blue-950/40 border border-blue-500/30 hover:border-blue-500/60 transition-all text-left space-y-1 group disabled:opacity-50"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-base">💼</span>
@@ -224,7 +186,7 @@ export const Login: React.FC = () => {
                 type="button"
                 onClick={() => handleDemoLogin('kabir')}
                 disabled={loading}
-                className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/60 transition-all text-left space-y-1 group"
+                className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/60 transition-all text-left space-y-1 group disabled:opacity-50"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-base">🚀</span>
