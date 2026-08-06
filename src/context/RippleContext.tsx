@@ -246,12 +246,16 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       if (data.user) {
-        setCurrentUser({
-          id: data.user.id,
-          email: data.user.email || email,
-          isDemo: false
-        });
-        showSuccess('Account registered successfully!');
+        if (data.session) {
+          setCurrentUser({
+            id: data.user.id,
+            email: data.user.email || email,
+            isDemo: false
+          });
+          showSuccess('Account created successfully!');
+        } else {
+          showSuccess('Account created! You can now log in.');
+        }
         return { success: true };
       }
 
