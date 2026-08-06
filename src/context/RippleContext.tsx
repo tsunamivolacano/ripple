@@ -4,19 +4,23 @@ import {
   Task, 
   EvidenceEntry, 
   ProcrastinationDebt, 
-  UserSettings, 
-  TaskStatus 
+  UserSettings 
 } from '@/types/ripple';
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { showSuccess, showError } from '@/utils/toast';
-import { ALL_PERSONAS, PERSONAS_MAP, FullPersonaBundle } from '@/data/ripplePersonaData';
-import { supabaseApi } from '@/integrations/supabase/client';
+import { PERSONAS_MAP } from '@/data/ripplePersonaData';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface UserAccount {
   id: string;
   email: string;
   isDemo?: boolean;
   demoPersonaId?: string;
+}
+
+interface AuthResponse {
+  success: boolean;
+  error?: string;
 }
 
 interface RippleContextType {
@@ -32,8 +36,8 @@ interface RippleContextType {
   completedTaskForCelebration: Task | null;
   
   // Auth actions
-  loginWithEmail: (email: string) => Promise<boolean>;
-  signUpWithEmail: (email: string) => Promise<boolean>;
+  loginWithEmail: (email: string, password: string) => Promise<AuthResponse>;
+  signUpWithEmail: (email: string, password: string) => Promise<AuthResponse>;
   loginDemoAccount: (personaId: string) => void;
   logout: () => void;
 
@@ -71,7 +75,6 @@ function safeGetLocalStorage<T>(key: string, fallback: T): T {
     const saved = localStorage.getItem(key);
     return saved ? (JSON.parse(saved) as T) : fallback;
   } catch (error) {
-    console.error(`Failed to parse ${key} from localStorage:`, error);
     return fallback;
   }
 }
@@ -88,7 +91,7 @@ const RippleContext = createContext<RippleContextType | undefined>(undefined);
 
 export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() =>
-    safeGetLocalStorage<UserAccount | null>('ripple_auth_user', null)
+    safeGetLocalStorage<UserAccount | null>('ripple_demo_auth_user', null)
   );
 
   const userKey = currentUser ? currentUser.id : 'anonymous';
@@ -121,58 +124,75 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
 
-  // Reload account specific data when user changes
+  // Monitor Supabase Auth Session State Changes
   useEffect(() => {
-    safeSetLocalStorage('ripple_auth_user', currentUser);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          isDemo: false
+        });
+      }
+    });
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setCurrentUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          isDemo: false
+        });
+      } else if (!currentUser?.isDemo) {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Fetch or load user data upon account change
+  useEffect(() => {
     if (currentUser) {
       const uKey = currentUser.id;
-      let initialPersona = defaultPersona;
-      if (currentUser.isDemo && currentUser.demoPersonaId) {
-        initialPersona = PERSONAS_MAP[currentUser.demoPersonaId] || defaultPersona;
-      }
 
-      setSlots(safeGetLocalStorage(`ripple_slots_${uKey}`, initialPersona.slots));
-      setTasks(safeGetLocalStorage(`ripple_tasks_${uKey}`, initialPersona.tasks));
-      setEvidenceEntries(safeGetLocalStorage(`ripple_evidence_${uKey}`, initialPersona.evidenceEntries));
-      setDebt(safeGetLocalStorage(`ripple_debt_${uKey}`, initialPersona.debt));
-      setSettings(safeGetLocalStorage(`ripple_settings_${uKey}`, initialPersona.settings));
-      setCurrentPersonaId(safeGetLocalStorage(`ripple_persona_id_${uKey}`, initialPersona.id));
+      if (currentUser.isDemo && currentUser.demoPersonaId) {
+        const persona = PERSONAS_MAP[currentUser.demoPersonaId] || defaultPersona;
+        setSlots(safeGetLocalStorage(`ripple_slots_${uKey}`, persona.slots));
+        setTasks(safeGetLocalStorage(`ripple_tasks_${uKey}`, persona.tasks));
+        setEvidenceEntries(safeGetLocalStorage(`ripple_evidence_${uKey}`, persona.evidenceEntries));
+        setDebt(safeGetLocalStorage(`ripple_debt_${uKey}`, persona.debt));
+        setSettings(safeGetLocalStorage(`ripple_settings_${uKey}`, persona.settings));
+        setCurrentPersonaId(persona.id);
+      } else {
+        // Authenticated real user - load user specific isolated storage / cloud session state
+        setSlots(safeGetLocalStorage(`ripple_slots_${uKey}`, []));
+        setTasks(safeGetLocalStorage(`ripple_tasks_${uKey}`, []));
+        setEvidenceEntries(safeGetLocalStorage(`ripple_evidence_${uKey}`, []));
+        setDebt(safeGetLocalStorage(`ripple_debt_${uKey}`, {
+          totalHoursBehind: 0,
+          missedDeadlinesCount: 0,
+          streakDays: 0,
+          compoundingScore: 0,
+          weeklyDebtTrend: []
+        }));
+        setSettings(safeGetLocalStorage(`ripple_settings_${uKey}`, defaultPersona.settings));
+      }
     }
   }, [currentUser]);
 
-  // Sync state to account-isolated LocalStorage
+  // Persist state safely to isolated storage space for current user session
   useEffect(() => {
     if (currentUser) {
       safeSetLocalStorage(`ripple_slots_${currentUser.id}`, slots);
-    }
-  }, [slots, currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
       safeSetLocalStorage(`ripple_tasks_${currentUser.id}`, tasks);
-    }
-  }, [tasks, currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
       safeSetLocalStorage(`ripple_evidence_${currentUser.id}`, evidenceEntries);
-    }
-  }, [evidenceEntries, currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
       safeSetLocalStorage(`ripple_debt_${currentUser.id}`, debt);
-    }
-  }, [debt, currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
       safeSetLocalStorage(`ripple_settings_${currentUser.id}`, settings);
     }
-  }, [settings, currentUser]);
+  }, [slots, tasks, evidenceEntries, debt, settings, currentUser]);
 
-  // Dynamic Ticker: refresh task statuses every 30 seconds
+  // Dynamic status updater ticker
   useEffect(() => {
     const timer = setInterval(() => {
       setTasks((prevTasks) =>
@@ -186,56 +206,59 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(timer);
   }, [settings.personalVelocityMultiplier]);
 
-  // Auth Methods
-  const loginWithEmail = async (email: string): Promise<boolean> => {
-    const cleanEmail = email.toLowerCase().trim();
-    const dbUser = await supabaseApi.getUserByEmail(cleanEmail);
+  // Auth Methods using Supabase Auth
+  const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password
+      });
 
-    if (dbUser) {
-      const account: UserAccount = {
-        id: dbUser.id || `usr_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`,
-        email: dbUser.email,
-        isDemo: false
-      };
-      setCurrentUser(account);
-      showSuccess(`Welcome back, ${account.email}`);
-      return true;
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        setCurrentUser({
+          id: data.user.id,
+          email: data.user.email || email,
+          isDemo: false
+        });
+        showSuccess(`Welcome back!`);
+        return { success: true };
+      }
+
+      return { success: false, error: 'User not found.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An unexpected error occurred.' };
     }
-
-    // Check fallback local accounts created previously
-    const localUser = safeGetLocalStorage<UserAccount | null>(`ripple_registered_${cleanEmail}`, null);
-    if (localUser) {
-      setCurrentUser(localUser);
-      showSuccess(`Welcome back, ${localUser.email}`);
-      return true;
-    }
-
-    return false;
   };
 
-  const signUpWithEmail = async (email: string): Promise<boolean> => {
-    const cleanEmail = email.toLowerCase().trim();
-    
-    // Check if already registered in DB or local
-    const existing = await supabaseApi.getUserByEmail(cleanEmail);
-    const existingLocal = safeGetLocalStorage<UserAccount | null>(`ripple_registered_${cleanEmail}`, null);
+  const signUpWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password
+      });
 
-    if (existing || existingLocal) {
-      return false; // Email already registered
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        setCurrentUser({
+          id: data.user.id,
+          email: data.user.email || email,
+          isDemo: false
+        });
+        showSuccess('Account registered successfully!');
+        return { success: true };
+      }
+
+      return { success: false, error: 'Registration failed.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An unexpected error occurred.' };
     }
-
-    // Create user in DB
-    const newDbUser = await supabaseApi.createUser(cleanEmail);
-    const account: UserAccount = {
-      id: newDbUser?.id || `usr_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`,
-      email: cleanEmail,
-      isDemo: false
-    };
-
-    safeSetLocalStorage(`ripple_registered_${cleanEmail}`, account);
-    setCurrentUser(account);
-    showSuccess(`Account created for ${cleanEmail}!`);
-    return true;
   };
 
   const loginDemoAccount = (personaId: string) => {
@@ -246,11 +269,17 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isDemo: true,
       demoPersonaId: persona.id
     };
+    safeSetLocalStorage('ripple_demo_auth_user', account);
     setCurrentUser(account);
-    showSuccess(`Logged in as Demo Account: ${persona.name}`);
+    showSuccess(`Viewing Demo Persona: ${persona.name}`);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (currentUser?.isDemo) {
+      safeSetLocalStorage('ripple_demo_auth_user', null);
+    } else {
+      await supabase.auth.signOut();
+    }
     setCurrentUser(null);
     showSuccess('Signed out.');
   };
@@ -353,7 +382,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       compoundingScore: Math.min(100, prev.compoundingScore + 8)
     }));
 
-    showSuccess('Task schedule renegotiated. Doomsday Clock reset.');
+    showSuccess('Task schedule renegotiated.');
   };
 
   const deleteTask = (id: string) => {

@@ -1,52 +1,61 @@
 import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { ALL_PERSONAS } from '@/data/ripplePersonaData';
-import { Zap, Mail, ArrowRight, UserPlus, LogIn, Sparkles, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Zap, Mail, Lock, ArrowRight, UserPlus, LogIn, AlertCircle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export const AuthPage: React.FC = () => {
   const { loginWithEmail, signUpWithEmail, loginDemoAccount } = useRipple();
 
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  
   const [signUpEmail, setSignUpEmail] = useState('');
+  const [signUpPassword, setSignUpPassword] = useState('');
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    if (!loginEmail.trim()) {
-      setErrorMessage('Please enter an email address.');
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setErrorMessage('Please provide both email and password.');
       return;
     }
 
     setIsLoading(true);
-    const success = await loginWithEmail(loginEmail);
+    const result = await loginWithEmail(loginEmail, loginPassword);
     setIsLoading(false);
 
-    if (!success) {
-      setErrorMessage('Account not found.');
+    if (!result.success) {
+      setErrorMessage(result.error || 'Authentication failed. Please check your credentials.');
     }
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    if (!signUpEmail.trim()) {
-      setErrorMessage('Please enter an email address.');
+    if (!signUpEmail.trim() || !signUpPassword.trim()) {
+      setErrorMessage('Please fill in all fields.');
+      return;
+    }
+
+    if (signUpPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.');
       return;
     }
 
     setIsLoading(true);
-    const success = await signUpWithEmail(signUpEmail);
+    const result = await signUpWithEmail(signUpEmail, signUpPassword);
     setIsLoading(false);
 
-    if (!success) {
-      setErrorMessage('Email already registered.');
+    if (!result.success) {
+      setErrorMessage(result.error || 'Registration failed. Please try again.');
     }
   };
 
@@ -88,7 +97,7 @@ export const AuthPage: React.FC = () => {
 
             <CardContent className="p-6 space-y-5">
               {errorMessage && (
-                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/50 flex items-center gap-2 text-rose-300 text-xs animate-shake">
+                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/50 flex items-center gap-2 text-rose-300 text-xs">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                   <span>{errorMessage}</span>
                 </div>
@@ -112,12 +121,27 @@ export const AuthPage: React.FC = () => {
                     />
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-rose-400" />
+                      Password
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                      className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
+                    />
+                  </div>
+
                   <Button
                     type="submit"
                     disabled={isLoading}
                     className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-lg shadow-rose-950"
                   >
-                    {isLoading ? 'Checking...' : 'Login'}
+                    {isLoading ? 'Authenticating...' : 'Sign In'}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
@@ -141,12 +165,27 @@ export const AuthPage: React.FC = () => {
                     />
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-rose-400" />
+                      Password
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="Min. 6 characters"
+                      value={signUpPassword}
+                      onChange={(e) => setSignUpPassword(e.target.value)}
+                      required
+                      className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
+                    />
+                  </div>
+
                   <Button
                     type="submit"
                     disabled={isLoading}
                     className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-lg shadow-rose-950"
                   >
-                    {isLoading ? 'Creating...' : 'Create Account'}
+                    {isLoading ? 'Creating Account...' : 'Create Account'}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
@@ -159,7 +198,7 @@ export const AuthPage: React.FC = () => {
                 </div>
                 <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-widest">
                   <span className="bg-slate-900 px-3 text-slate-400">
-                    OR CONTINUE WITH DEMO ACCOUNT
+                    OR EXPLORE WITH DEMO PERSONA
                   </span>
                 </div>
               </div>
@@ -203,7 +242,7 @@ export const AuthPage: React.FC = () => {
         {/* Privacy Note */}
         <p className="text-[11px] text-center text-slate-500 flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          No password or verification code required. Data persisted per account.
+          Secured with Supabase Auth session tokens & Row-Level Security.
         </p>
       </div>
     </div>
