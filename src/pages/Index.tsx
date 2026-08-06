@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RippleProvider, useRipple } from '@/context/RippleContext';
+import { AuthPage } from '@/components/auth/AuthPage';
 import { Navbar } from '@/components/header/Navbar';
 import { WarRoom } from '@/components/doomsday/WarRoom';
 import { PredictionView } from '@/components/prediction/PredictionView';
@@ -15,6 +16,7 @@ import { MadeWithDyad } from '@/components/made-with-dyad';
 
 const RippleAppContent: React.FC = () => {
   const {
+    currentUser,
     activeTaskForPrediction,
     activeFocusTask,
     completedTaskForCelebration,
@@ -26,6 +28,10 @@ const RippleAppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('warroom');
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [renegotiateTask, setRenegotiateTask] = useState<Task | null>(null);
+
+  if (!currentUser) {
+    return <AuthPage />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white">

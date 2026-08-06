@@ -9,7 +9,8 @@ import {
   FileText, 
   TrendingDown, 
   Plus, 
-  UserCheck,
+  LogOut,
+  User,
   ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,9 +31,9 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, currentPersonaId, loadPersonaData } = useRipple();
+  const { debt, currentUser, logout, loginDemoAccount } = useRipple();
 
-  const currentPersona = ALL_PERSONAS.find(p => p.id === currentPersonaId) || ALL_PERSONAS[0];
+  const activeDemoPersona = ALL_PERSONAS.find(p => p.id === currentUser?.demoPersonaId);
 
   const navItems = [
     { id: 'warroom', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
@@ -69,7 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
           <div className="hidden md:flex items-center gap-3">
             <IntensitySelector />
 
-            {/* Persona Switcher Dropdown */}
+            {/* Persona Switcher / User Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -77,44 +78,65 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
                   size="sm"
                   className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-200 gap-2"
                 >
-                  <span className="text-sm">{currentPersona.avatarBadge}</span>
-                  <span className="font-semibold">{currentPersona.name}</span>
-                  <span className="text-[10px] text-slate-400 font-normal">({currentPersona.role})</span>
+                  {currentUser?.isDemo ? (
+                    <>
+                      <span className="text-sm">{activeDemoPersona?.avatarBadge || '👤'}</span>
+                      <span className="font-semibold">{activeDemoPersona?.name || 'Demo'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <User className="w-3.5 h-3.5 text-rose-400" />
+                      <span className="font-semibold truncate max-w-[120px]">{currentUser?.email}</span>
+                    </>
+                  )}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </Button>
               </DropdownMenuTrigger>
+
               <DropdownMenuContent className="bg-slate-900 border-slate-800 text-slate-100 w-64 rounded-xl p-1">
                 <DropdownMenuLabel className="text-[11px] font-mono text-slate-400 uppercase tracking-wider px-2 py-1.5">
-                  Select Demo Persona Profile
+                  Logged in as {currentUser?.isDemo ? 'Demo Account' : currentUser?.email}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-slate-800" />
+
+                <DropdownMenuLabel className="text-[10px] text-slate-500 uppercase tracking-wider px-2 py-1">
+                  Switch Demo Account
+                </DropdownMenuLabel>
+
                 {ALL_PERSONAS.map((persona) => {
-                  const isSelected = persona.id === currentPersonaId;
+                  const isSelected = currentUser?.isDemo && currentUser?.demoPersonaId === persona.id;
                   return (
                     <DropdownMenuItem
                       key={persona.id}
-                      onClick={() => loadPersonaData(persona.id)}
-                      className={`cursor-pointer rounded-lg px-2.5 py-2 flex items-start gap-2.5 transition-colors ${
+                      onClick={() => loginDemoAccount(persona.id)}
+                      className={`cursor-pointer rounded-lg px-2.5 py-1.5 flex items-center justify-between text-xs ${
                         isSelected
                           ? 'bg-rose-500/15 text-white font-medium border border-rose-500/30'
                           : 'hover:bg-slate-800 text-slate-300'
                       }`}
                     >
-                      <span className="text-lg shrink-0 mt-0.5">{persona.avatarBadge}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold truncate">{persona.name}</span>
-                          {isSelected && (
-                            <Badge variant="outline" className="text-[9px] border-rose-500/40 text-rose-300 bg-rose-950/40">
-                              Active
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 truncate">{persona.role}</p>
+                      <div className="flex items-center gap-2">
+                        <span>{persona.avatarBadge}</span>
+                        <span>{persona.name}</span>
                       </div>
+                      {isSelected && (
+                        <Badge variant="outline" className="text-[9px] border-rose-500/40 text-rose-300 bg-rose-950/40">
+                          Active
+                        </Badge>
+                      )}
                     </DropdownMenuItem>
                   );
                 })}
+
+                <DropdownMenuSeparator className="bg-slate-800" />
+
+                <DropdownMenuItem
+                  onClick={logout}
+                  className="cursor-pointer text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg px-2.5 py-1.5 flex items-center gap-2 text-xs font-semibold"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign Out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 

@@ -10,8 +10,17 @@ import {
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { showSuccess, showError } from '@/utils/toast';
 import { ALL_PERSONAS, PERSONAS_MAP, FullPersonaBundle } from '@/data/ripplePersonaData';
+import { supabaseApi } from '@/integrations/supabase/client';
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  isDemo?: boolean;
+  demoPersonaId?: string;
+}
 
 interface RippleContextType {
+  currentUser: UserAccount | null;
   slots: TimetableSlot[];
   tasks: Task[];
   evidenceEntries: EvidenceEntry[];
@@ -21,6 +30,13 @@ interface RippleContextType {
   activeTaskForPrediction: Task | null;
   activeFocusTask: Task | null;
   completedTaskForCelebration: Task | null;
+  
+  // Auth actions
+  loginWithEmail: (email: string) => Promise<boolean>;
+  signUpWithEmail: (email: string) => Promise<boolean>;
+  loginDemoAccount: (personaId: string) => void;
+  logout: () => void;
+
   setActiveTaskForPrediction: (task: Task | null) => void;
   setActiveFocusTask: (task: Task | null) => void;
   setCompletedTaskForCelebration: (task: Task | null) => void;
@@ -45,7 +61,6 @@ interface RippleContextType {
   
   // Persona actions
   loadPersonaData: (personaId: string) => void;
-  loadSampleData: () => void;
   resetAllData: () => void;
 }
 
@@ -72,58 +87,90 @@ function safeSetLocalStorage<T>(key: string, value: T): void {
 const RippleContext = createContext<RippleContextType | undefined>(undefined);
 
 export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() =>
+    safeGetLocalStorage<UserAccount | null>('ripple_auth_user', null)
+  );
+
+  const userKey = currentUser ? currentUser.id : 'anonymous';
+
   const [currentPersonaId, setCurrentPersonaId] = useState<string>(() =>
-    safeGetLocalStorage('ripple_persona_id', 'riya')
+    safeGetLocalStorage(`ripple_persona_id_${userKey}`, currentUser?.demoPersonaId || 'riya')
   );
 
   const [slots, setSlots] = useState<TimetableSlot[]>(() => 
-    safeGetLocalStorage('ripple_slots', defaultPersona.slots)
+    safeGetLocalStorage(`ripple_slots_${userKey}`, defaultPersona.slots)
   );
 
   const [tasks, setTasks] = useState<Task[]>(() => 
-    safeGetLocalStorage('ripple_tasks', defaultPersona.tasks)
+    safeGetLocalStorage(`ripple_tasks_${userKey}`, defaultPersona.tasks)
   );
 
   const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>(() => 
-    safeGetLocalStorage('ripple_evidence', defaultPersona.evidenceEntries)
+    safeGetLocalStorage(`ripple_evidence_${userKey}`, defaultPersona.evidenceEntries)
   );
 
   const [debt, setDebt] = useState<ProcrastinationDebt>(() => 
-    safeGetLocalStorage('ripple_debt', defaultPersona.debt)
+    safeGetLocalStorage(`ripple_debt_${userKey}`, defaultPersona.debt)
   );
 
   const [settings, setSettings] = useState<UserSettings>(() => 
-    safeGetLocalStorage('ripple_settings', defaultPersona.settings)
+    safeGetLocalStorage(`ripple_settings_${userKey}`, defaultPersona.settings)
   );
 
   const [activeTaskForPrediction, setActiveTaskForPrediction] = useState<Task | null>(null);
   const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
 
-  // Sync to LocalStorage
+  // Reload account specific data when user changes
   useEffect(() => {
-    safeSetLocalStorage('ripple_persona_id', currentPersonaId);
-  }, [currentPersonaId]);
+    safeSetLocalStorage('ripple_auth_user', currentUser);
+
+    if (currentUser) {
+      const uKey = currentUser.id;
+      let initialPersona = defaultPersona;
+      if (currentUser.isDemo && currentUser.demoPersonaId) {
+        initialPersona = PERSONAS_MAP[currentUser.demoPersonaId] || defaultPersona;
+      }
+
+      setSlots(safeGetLocalStorage(`ripple_slots_${uKey}`, initialPersona.slots));
+      setTasks(safeGetLocalStorage(`ripple_tasks_${uKey}`, initialPersona.tasks));
+      setEvidenceEntries(safeGetLocalStorage(`ripple_evidence_${uKey}`, initialPersona.evidenceEntries));
+      setDebt(safeGetLocalStorage(`ripple_debt_${uKey}`, initialPersona.debt));
+      setSettings(safeGetLocalStorage(`ripple_settings_${uKey}`, initialPersona.settings));
+      setCurrentPersonaId(safeGetLocalStorage(`ripple_persona_id_${uKey}`, initialPersona.id));
+    }
+  }, [currentUser]);
+
+  // Sync state to account-isolated LocalStorage
+  useEffect(() => {
+    if (currentUser) {
+      safeSetLocalStorage(`ripple_slots_${currentUser.id}`, slots);
+    }
+  }, [slots, currentUser]);
 
   useEffect(() => {
-    safeSetLocalStorage('ripple_slots', slots);
-  }, [slots]);
+    if (currentUser) {
+      safeSetLocalStorage(`ripple_tasks_${currentUser.id}`, tasks);
+    }
+  }, [tasks, currentUser]);
 
   useEffect(() => {
-    safeSetLocalStorage('ripple_tasks', tasks);
-  }, [tasks]);
+    if (currentUser) {
+      safeSetLocalStorage(`ripple_evidence_${currentUser.id}`, evidenceEntries);
+    }
+  }, [evidenceEntries, currentUser]);
 
   useEffect(() => {
-    safeSetLocalStorage('ripple_evidence', evidenceEntries);
-  }, [evidenceEntries]);
+    if (currentUser) {
+      safeSetLocalStorage(`ripple_debt_${currentUser.id}`, debt);
+    }
+  }, [debt, currentUser]);
 
   useEffect(() => {
-    safeSetLocalStorage('ripple_debt', debt);
-  }, [debt]);
-
-  useEffect(() => {
-    safeSetLocalStorage('ripple_settings', settings);
-  }, [settings]);
+    if (currentUser) {
+      safeSetLocalStorage(`ripple_settings_${currentUser.id}`, settings);
+    }
+  }, [settings, currentUser]);
 
   // Dynamic Ticker: refresh task statuses every 30 seconds
   useEffect(() => {
@@ -138,6 +185,75 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, 30000);
     return () => clearInterval(timer);
   }, [settings.personalVelocityMultiplier]);
+
+  // Auth Methods
+  const loginWithEmail = async (email: string): Promise<boolean> => {
+    const cleanEmail = email.toLowerCase().trim();
+    const dbUser = await supabaseApi.getUserByEmail(cleanEmail);
+
+    if (dbUser) {
+      const account: UserAccount = {
+        id: dbUser.id || `usr_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`,
+        email: dbUser.email,
+        isDemo: false
+      };
+      setCurrentUser(account);
+      showSuccess(`Welcome back, ${account.email}`);
+      return true;
+    }
+
+    // Check fallback local accounts created previously
+    const localUser = safeGetLocalStorage<UserAccount | null>(`ripple_registered_${cleanEmail}`, null);
+    if (localUser) {
+      setCurrentUser(localUser);
+      showSuccess(`Welcome back, ${localUser.email}`);
+      return true;
+    }
+
+    return false;
+  };
+
+  const signUpWithEmail = async (email: string): Promise<boolean> => {
+    const cleanEmail = email.toLowerCase().trim();
+    
+    // Check if already registered in DB or local
+    const existing = await supabaseApi.getUserByEmail(cleanEmail);
+    const existingLocal = safeGetLocalStorage<UserAccount | null>(`ripple_registered_${cleanEmail}`, null);
+
+    if (existing || existingLocal) {
+      return false; // Email already registered
+    }
+
+    // Create user in DB
+    const newDbUser = await supabaseApi.createUser(cleanEmail);
+    const account: UserAccount = {
+      id: newDbUser?.id || `usr_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`,
+      email: cleanEmail,
+      isDemo: false
+    };
+
+    safeSetLocalStorage(`ripple_registered_${cleanEmail}`, account);
+    setCurrentUser(account);
+    showSuccess(`Account created for ${cleanEmail}!`);
+    return true;
+  };
+
+  const loginDemoAccount = (personaId: string) => {
+    const persona = PERSONAS_MAP[personaId] || defaultPersona;
+    const account: UserAccount = {
+      id: `demo_${persona.id}`,
+      email: `${persona.id}@demo.ripple`,
+      isDemo: true,
+      demoPersonaId: persona.id
+    };
+    setCurrentUser(account);
+    showSuccess(`Logged in as Demo Account: ${persona.name}`);
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    showSuccess('Signed out.');
+  };
 
   const addSlot = (slotData: Omit<TimetableSlot, 'id'>) => {
     const newSlot: TimetableSlot = {
@@ -195,7 +311,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
           if (isComplete) {
             setCompletedTaskForCelebration(updatedTask);
-            // Update debt streak
             setDebt((d) => ({
               ...d,
               streakDays: d.streakDays + 1,
@@ -232,7 +347,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
     );
 
-    // Increase debt slightly for renegotiation penalty
     setDebt((prev) => ({
       ...prev,
       totalHoursBehind: prev.totalHoursBehind + 0.5,
@@ -270,11 +384,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setEvidenceEntries(bundle.evidenceEntries);
     setDebt(bundle.debt);
     setSettings(bundle.settings);
-    showSuccess(`Loaded demo persona: ${bundle.name} (${bundle.role})`);
-  };
-
-  const loadSampleData = () => {
-    loadPersonaData('riya');
+    showSuccess(`Loaded template data: ${bundle.name}`);
   };
 
   const resetAllData = () => {
@@ -294,6 +404,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   return (
     <RippleContext.Provider
       value={{
+        currentUser,
         slots,
         tasks,
         evidenceEntries,
@@ -303,6 +414,10 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         activeTaskForPrediction,
         activeFocusTask,
         completedTaskForCelebration,
+        loginWithEmail,
+        signUpWithEmail,
+        loginDemoAccount,
+        logout,
         setActiveTaskForPrediction,
         setActiveFocusTask,
         setCompletedTaskForCelebration,
@@ -317,7 +432,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         logEvidence,
         updateSettings,
         loadPersonaData,
-        loadSampleData,
         resetAllData
       }}
     >
