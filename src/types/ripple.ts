@@ -20,17 +20,8 @@ export type TaskStatus = 'manageable' | 'tight' | 'critical' | 'too_late' | 'com
 
 export type TaskType = 'essay' | 'lab_report' | 'reading' | 'problem_set' | 'revision' | 'project';
 
-export interface UserProfile {
-  id: string;
-  email: string;
-  name: string;
-  role: 'student' | 'corporate' | 'other';
-  createdAt?: string;
-}
-
 export interface TimetableSlot {
   id: string;
-  userId?: string;
   subject: string;
   dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   startTime: string; // HH:mm
@@ -45,7 +36,6 @@ export interface TimetableSlot {
 
 export interface Task {
   id: string;
-  userId?: string;
   title: string;
   description?: string;
   slotId?: string;
@@ -99,8 +89,7 @@ export interface ConsequenceForecast {
 
 export interface EvidenceEntry {
   id: string;
-  userId?: string;
-  taskId?: string;
+  taskId: string;
   taskTitle: string;
   subject: string;
   teacherName: string;
@@ -116,7 +105,7 @@ export interface ProcrastinationDebt {
   totalHoursBehind: number;
   missedDeadlinesCount: number;
   streakDays: number;
-  compoundingScore: number;
+  compoundingScore: number; // calculated metric
   weeklyDebtTrend: { day: string; debtHours: number }[];
 }
 
@@ -124,5 +113,5 @@ export interface UserSettings {
   intensityMode: IntensityMode;
   isMinorProfile: boolean;
   weeklyDigestOnly: boolean;
-  personalVelocityMultiplier: number;
+  personalVelocityMultiplier: number; // e.g. 1.2x (takes 20% longer than estimated)
 }
