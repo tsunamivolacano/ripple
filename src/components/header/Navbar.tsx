@@ -8,8 +8,7 @@ import {
   FileText, 
   TrendingDown, 
   Plus, 
-  LogOut,
-  User as UserIcon
+  LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +20,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, user, profile, signOut } = useRipple();
+  const { debt, profile, signOut } = useRipple();
 
   const navItems = [
     { id: 'warroom', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
@@ -67,14 +66,14 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
               New Task
             </Button>
 
-            {user && (
+            {profile && (
               <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
                 <div className="hidden md:block text-right">
                   <div className="text-xs font-bold text-white leading-none">
-                    {profile?.name || user.email?.split('@')[0]}
+                    {profile.name}
                   </div>
                   <div className="text-[10px] text-slate-400 capitalize">
-                    {profile?.role || 'User'}
+                    {profile.role} • {profile.email}
                   </div>
                 </div>
 
@@ -122,3 +121,104 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
     </header>
   );
 };
+</dyad-file>
+
+<dyad-write path="src/App.tsx" description="Updating App routes to use profile context check for route protection">
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Index from "./pages/Index";
+import Login from "./pages/Login";
+import SignUp from "./pages/SignUp";
+import NotFound from "./pages/NotFound";
+import { RippleProvider, useRipple } from "@/context/RippleContext";
+
+const queryClient = new QueryClient();
+
+// Protected Route Wrapper
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { profile, loading } = useRipple();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
+        <div className="w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin mb-2" />
+        <p className="text-xs text-slate-400 font-mono">Restoring profile session...</p>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Auth Route Wrapper (Redirects to / if logged in)
+const PublicAuthRoute = ({ children }: { children: React.ReactNode }) => {
+  const { profile, loading } = useRipple();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
+        <div className="w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin mb-2" />
+        <p className="text-xs text-slate-400 font-mono">Loading...</p>
+      </div>
+    );
+  }
+
+  if (profile) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const AppRoutes = () => (
+  <Routes>
+    <Route
+      path="/login"
+      element={
+        <PublicAuthRoute>
+          <Login />
+        </PublicAuthRoute>
+      }
+    />
+    <Route
+      path="/signup"
+      element={
+        <PublicAuthRoute>
+          <SignUp />
+        </PublicAuthRoute>
+      }
+    />
+    <Route
+      path="/"
+      element={
+        <ProtectedRoute>
+          <Index />
+        </ProtectedRoute>
+      }
+    />
+    <Route path="*" element={<NotFound />} />
+  </Routes>
+);
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <RippleProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </RippleProvider>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
+
+export default App;

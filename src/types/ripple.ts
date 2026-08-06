@@ -22,6 +22,7 @@ export type TaskType = 'essay' | 'lab_report' | 'reading' | 'problem_set' | 'rev
 
 export interface UserProfile {
   id: string;
+  email: string;
   name: string;
   role: 'student' | 'corporate' | 'other';
   createdAt?: string;

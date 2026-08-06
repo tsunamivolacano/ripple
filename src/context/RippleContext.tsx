@@ -11,11 +11,11 @@ import {
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { calculateDebt } from '@/utils/debtUtils';
 import { showSuccess, showError } from '@/utils/toast';
-import { User } from '@supabase/supabase-js';
-import { fetchUserData, seedDemoDataForUser } from '@/services/rippleService';
+import { fetchUserDataByEmail, seedDemoDataForUser } from '@/services/rippleService';
+
+const LOCAL_STORAGE_EMAIL_KEY = 'ripple_user_email';
 
 interface RippleContextType {
-  user: User | null;
   profile: UserProfile | null;
   loading: boolean;
   slots: TimetableSlot[];
@@ -30,6 +30,11 @@ interface RippleContextType {
   setActiveFocusTask: (task: Task | null) => void;
   setCompletedTaskForCelebration: (task: Task | null) => void;
   
+  // Custom Email Auth actions
+  loginWithEmail: (email: string) => Promise<boolean>;
+  registerUser: (name: string, email: string, role: 'student' | 'corporate' | 'other') => Promise<boolean>;
+  signOut: () => void;
+
   // Slot management
   addSlot: (slot: Omit<TimetableSlot, 'id'>) => Promise<void>;
   updateSlot: (slot: TimetableSlot) => Promise<void>;
@@ -47,10 +52,6 @@ interface RippleContextType {
 
   // Settings
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
-  
-  // Auth
-  signOut: () => Promise<void>;
-  seedDemoPersona: (demoKey: 'riya' | 'aman' | 'kabir') => Promise<void>;
 }
 
 const defaultSettings: UserSettings = {
@@ -63,7 +64,6 @@ const defaultSettings: UserSettings = {
 const RippleContext = createContext<RippleContextType | undefined>(undefined);
 
 export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -79,54 +79,122 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Compute Procrastination Debt dynamically
   const computedDebt = useMemo(() => calculateDebt(tasks, evidenceEntries), [tasks, evidenceEntries]);
 
-  // Load user session & data on auth state change
+  // Restore session from localStorage on initial load
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadUser(session.user);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadUser(session.user);
-      } else {
-        setSlots([]);
-        setTasks([]);
-        setEvidenceEntries([]);
-        setProfile(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    const savedEmail = localStorage.getItem(LOCAL_STORAGE_EMAIL_KEY);
+    if (savedEmail) {
+      loadUserData(savedEmail);
+    } else {
+      setLoading(false);
+    }
   }, []);
 
-  const loadUser = async (currentUser: User) => {
+  const loadUserData = async (email: string) => {
     setLoading(true);
     try {
-      const data = await fetchUserData(currentUser);
-      setProfile(data.profile);
-      setSettings(data.settings);
-      setSlots(data.slots);
-      setTasks(data.tasks);
-      setEvidenceEntries(data.evidenceEntries);
+      const res = await fetchUserDataByEmail(email);
+      if (res) {
+        setProfile(res.profile);
+        setSettings(res.settings);
+        setSlots(res.slots);
+        setTasks(res.tasks);
+        setEvidenceEntries(res.evidenceEntries);
+        localStorage.setItem(LOCAL_STORAGE_EMAIL_KEY, res.profile.email);
+      } else {
+        localStorage.removeItem(LOCAL_STORAGE_EMAIL_KEY);
+        setProfile(null);
+      }
     } catch (err) {
-      console.error('Error loading user data:', err);
+      console.error('Error fetching user data:', err);
+      setProfile(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const seedDemoPersona = async (demoKey: 'riya' | 'aman' | 'kabir') => {
-    if (user) {
-      await seedDemoDataForUser(user.id, demoKey);
-      await loadUser(user);
+  const loginWithEmail = async (email: string): Promise<boolean> => {
+    const cleanEmail = email.toLowerCase().trim();
+    setLoading(true);
+
+    // Check if email exists in database
+    const { data: prof, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .ilike('email', cleanEmail)
+      .maybeSingle();
+
+    let demoKey: 'riya' | 'aman' | 'kabir' | null = null;
+    if (cleanEmail.includes('riya')) demoKey = 'riya';
+    else if (cleanEmail.includes('aman')) demoKey = 'aman';
+    else if (cleanEmail.includes('kabir')) demoKey = 'kabir';
+
+    if (!prof && !demoKey) {
+      setLoading(false);
+      showError('Account not found.');
+      return false;
     }
+
+    await loadUserData(cleanEmail);
+    showSuccess('Logged in successfully!');
+    return true;
+  };
+
+  const registerUser = async (name: string, email: string, role: 'student' | 'corporate' | 'other'): Promise<boolean> => {
+    const cleanEmail = email.toLowerCase().trim();
+    setLoading(true);
+
+    // 1. Check if email already exists
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('email', cleanEmail)
+      .maybeSingle();
+
+    if (existing) {
+      setLoading(false);
+      showError('Email already registered.');
+      return false;
+    }
+
+    // 2. Create new profile record
+    const newUserId = crypto.randomUUID();
+    const defaultIntensity = role === 'corporate' ? 'standard' : role === 'student' ? 'doomsday' : 'coach';
+
+    const { error: profErr } = await supabase.from('profiles').insert({
+      id: newUserId,
+      email: cleanEmail,
+      name,
+      role
+    });
+
+    if (profErr) {
+      setLoading(false);
+      showError(`Failed to create account: ${profErr.message}`);
+      return false;
+    }
+
+    // 3. Create default user settings
+    await supabase.from('user_settings').insert({
+      user_id: newUserId,
+      intensity_mode: defaultIntensity,
+      is_minor_profile: role === 'student',
+      weekly_digest_only: false,
+      personal_velocity_multiplier: 1.0
+    });
+
+    // 4. Load created user session
+    await loadUserData(cleanEmail);
+    showSuccess('Account created successfully!');
+    return true;
+  };
+
+  const signOut = () => {
+    localStorage.removeItem(LOCAL_STORAGE_EMAIL_KEY);
+    setProfile(null);
+    setSlots([]);
+    setTasks([]);
+    setEvidenceEntries([]);
+    showSuccess('Logged out safely.');
   };
 
   // Timer ticker to keep task statuses fresh
@@ -145,11 +213,11 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Slots CRUD
   const addSlot = async (slotData: Omit<TimetableSlot, 'id'>) => {
-    if (!user) return;
+    if (!profile) return;
     const { data, error } = await supabase
       .from('timetable_slots')
       .insert({
-        user_id: user.id,
+        user_id: profile.id,
         subject: slotData.subject,
         day_of_week: slotData.dayOfWeek,
         start_time: slotData.startTime,
@@ -170,14 +238,14 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     if (data) {
-      const newSlot: TimetableSlot = { id: data.id, userId: user.id, ...slotData };
+      const newSlot: TimetableSlot = { id: data.id, userId: profile.id, ...slotData };
       setSlots((prev) => [...prev, newSlot]);
       showSuccess(`Timetable slot for ${newSlot.subject} created.`);
     }
   };
 
   const updateSlot = async (updatedSlot: TimetableSlot) => {
-    if (!user) return;
+    if (!profile) return;
     const { error } = await supabase
       .from('timetable_slots')
       .update({
@@ -204,7 +272,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const deleteSlot = async (id: string) => {
-    if (!user) return;
+    if (!profile) return;
     const { error } = await supabase.from('timetable_slots').delete().eq('id', id);
     if (error) {
       showError(error.message);
@@ -216,7 +284,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Tasks CRUD
   const addTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'status'>) => {
-    if (!user) return;
+    if (!profile) return;
 
     const computedStatus = calculateTaskStatus(
       taskData.dueDate,
@@ -228,7 +296,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { data, error } = await supabase
       .from('tasks')
       .insert({
-        user_id: user.id,
+        user_id: profile.id,
         title: taskData.title,
         description: taskData.description,
         slot_id: taskData.slotId || null,
@@ -250,7 +318,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const newTask: Task = {
         ...taskData,
         id: data.id,
-        userId: user.id,
+        userId: profile.id,
         createdAt: data.created_at,
         status: computedStatus
       };
@@ -260,7 +328,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateTaskProgress = async (taskId: string, percentage: number) => {
-    if (!user) return;
+    if (!profile) return;
     const targetTask = tasks.find((t) => t.id === taskId);
     if (!targetTask) return;
 
@@ -309,7 +377,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const renegotiateTask = async (taskId: string, newDueDate: string, reason: string) => {
-    if (!user) return;
+    if (!profile) return;
     const targetTask = tasks.find((t) => t.id === taskId);
     if (!targetTask) return;
 
@@ -351,7 +419,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const deleteTask = async (id: string) => {
-    if (!user) return;
+    if (!profile) return;
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) {
       showError(error.message);
@@ -363,12 +431,12 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Evidence Log
   const logEvidence = async (entryData: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => {
-    if (!user) return;
+    if (!profile) return;
 
     const { data, error } = await supabase
       .from('evidence_log')
       .insert({
-        user_id: user.id,
+        user_id: profile.id,
         task_id: entryData.taskId || null,
         task_title: entryData.taskTitle,
         subject: entryData.subject,
@@ -391,7 +459,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const newEntry: EvidenceEntry = {
         ...entryData,
         id: data.id,
-        userId: user.id,
+        userId: profile.id,
         dateLogged: data.date_logged
       };
       setEvidenceEntries((prev) => [newEntry, ...prev]);
@@ -404,9 +472,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
 
-    if (user) {
+    if (profile) {
       await supabase.from('user_settings').upsert({
-        user_id: user.id,
+        user_id: profile.id,
         intensity_mode: updated.intensityMode,
         is_minor_profile: updated.isMinorProfile,
         weekly_digest_only: updated.weeklyDigestOnly,
@@ -416,20 +484,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showSuccess('Settings updated.');
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setSlots([]);
-    setTasks([]);
-    setEvidenceEntries([]);
-    showSuccess('Logged out safely.');
-  };
-
   return (
     <RippleContext.Provider
       value={{
-        user,
         profile,
         loading,
         slots,
@@ -443,6 +500,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setActiveTaskForPrediction,
         setActiveFocusTask,
         setCompletedTaskForCelebration,
+        loginWithEmail,
+        registerUser,
         addSlot,
         updateSlot,
         deleteSlot,
@@ -453,8 +512,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteTask,
         logEvidence,
         updateSettings,
-        signOut,
-        seedDemoPersona
+        signOut
       }}
     >
       {children}

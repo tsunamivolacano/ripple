@@ -1,90 +1,39 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { showSuccess, showError } from '@/utils/toast';
-import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { useRipple } from '@/context/RippleContext';
-import { Zap, ArrowRight, ShieldCheck, UserCheck, Flame, Sparkles } from 'lucide-react';
+import { Zap, ShieldCheck, Flame, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { seedDemoPersona } = useRipple();
+  const { loginWithEmail } = useRipple();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      showError('Please fill in both email and password.');
+    if (!email.trim()) {
       return;
     }
 
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
+    const success = await loginWithEmail(email);
     setLoading(false);
 
-    if (error) {
-      showError(error.message || 'Failed to sign in.');
-    } else if (data.session) {
-      showSuccess('Signed in successfully!');
+    if (success) {
       navigate('/');
     }
   };
 
   const handleDemoLogin = async (demoKey: 'riya' | 'aman' | 'kabir') => {
     setLoading(true);
-    const persona = PERSONAS_MAP[demoKey];
     const demoEmail = `${demoKey}.demo@ripple.app`;
-    const demoPassword = `${demoKey.charAt(0).toUpperCase() + demoKey.slice(1)}@2026`;
-
-    try {
-      // Attempt Sign In
-      let { data, error } = await supabase.auth.signInWithPassword({
-        email: demoEmail,
-        password: demoPassword
-      });
-
-      // If user doesn't exist yet, sign up
-      if (error) {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: demoEmail,
-          password: demoPassword,
-          options: {
-            data: {
-              name: persona.name,
-              role: persona.role
-            }
-          }
-        });
-
-        if (signUpError) {
-          showError(`Demo Login error: ${signUpError.message}`);
-          setLoading(false);
-          return;
-        }
-
-        data = signUpData as any;
-      }
-
-      if (data?.session || data?.user) {
-        showSuccess(`Welcome! Logged in as ${persona.name}`);
-        navigate('/');
-      } else {
-        showSuccess(`Logged in as ${persona.name}`);
-        navigate('/');
-      }
-    } catch (e: any) {
-      showError(e?.message || 'Error signing in to demo persona');
-    } finally {
-      setLoading(false);
+    const success = await loginWithEmail(demoEmail);
+    setLoading(false);
+    if (success) {
+      navigate('/');
     }
   };
 
@@ -109,7 +58,7 @@ export const Login: React.FC = () => {
           <div>
             <h2 className="text-lg font-bold text-white">Sign In to Your Account</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Access your real-time doomsday timers, schedule, and evidence log.
+              Enter your registered email address to restore your session.
             </p>
           </div>
 
@@ -126,24 +75,12 @@ export const Login: React.FC = () => {
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-300">Password</Label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="bg-slate-950 border-slate-800 text-xs text-white placeholder:text-slate-600 h-10"
-                required
-              />
-            </div>
-
             <Button
               type="submit"
               disabled={loading}
               className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs h-10 shadow-lg shadow-rose-950"
             >
-              {loading ? 'Signing in...' : 'Log In'}
+              {loading ? 'Logging in...' : 'Log In'}
             </Button>
           </form>
 

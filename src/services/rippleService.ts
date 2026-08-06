@@ -7,11 +7,10 @@ import {
   UserProfile 
 } from '@/types/ripple';
 import { calculateTaskStatus } from '@/utils/timeUtils';
-import { User } from '@supabase/supabase-js';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 
 export interface UserDataResult {
-  profile: UserProfile | null;
+  profile: UserProfile;
   settings: UserSettings;
   slots: TimetableSlot[];
   tasks: Task[];
@@ -25,7 +24,7 @@ const defaultSettings: UserSettings = {
   personalVelocityMultiplier: 1.0
 };
 
-export async function seedDemoDataForUser(userId: string, demoKey: 'riya' | 'aman' | 'kabir'): Promise<void> {
+export async function seedDemoDataForUser(userId: string, demoKey: 'riya' | 'aman' | 'kabir', email: string): Promise<void> {
   const bundle = PERSONAS_MAP[demoKey];
   if (!bundle) return;
 
@@ -33,6 +32,7 @@ export async function seedDemoDataForUser(userId: string, demoKey: 'riya' | 'ama
     // 1. Profile
     await supabase.from('profiles').upsert({
       id: userId,
+      email: email.toLowerCase().trim(),
       name: bundle.name,
       role: bundle.role
     });
@@ -107,53 +107,47 @@ export async function seedDemoDataForUser(userId: string, demoKey: 'riya' | 'ama
   }
 }
 
-export async function fetchUserData(currentUser: User): Promise<UserDataResult> {
-  const userId = currentUser.id;
-  const userEmail = currentUser.email || '';
+export async function fetchUserDataByEmail(email: string): Promise<UserDataResult | null> {
+  const cleanEmail = email.toLowerCase().trim();
 
-  let demoKey: 'riya' | 'aman' | 'kabir' | null = null;
-  if (userEmail.includes('riya')) demoKey = 'riya';
-  else if (userEmail.includes('aman')) demoKey = 'aman';
-  else if (userEmail.includes('kabir')) demoKey = 'kabir';
-
-  // Fetch Profile
+  // Fetch Profile by email
   let { data: profData } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', userId)
+    .ilike('email', cleanEmail)
     .maybeSingle();
 
-  // Fetch Slots
-  let { data: slotsData } = await supabase
-    .from('timetable_slots')
-    .select('*')
-    .eq('user_id', userId);
+  let demoKey: 'riya' | 'aman' | 'kabir' | null = null;
+  if (cleanEmail.includes('riya')) demoKey = 'riya';
+  else if (cleanEmail.includes('aman')) demoKey = 'aman';
+  else if (cleanEmail.includes('kabir')) demoKey = 'kabir';
 
-  // If demo user and slots are empty, seed demo data first
-  if (demoKey && (!slotsData || slotsData.length === 0)) {
-    await seedDemoDataForUser(userId, demoKey);
-    const { data: pData } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    profData = pData;
-    const { data: sData } = await supabase.from('timetable_slots').select('*').eq('user_id', userId);
-    slotsData = sData;
+  if (!profData && demoKey) {
+    const bundle = PERSONAS_MAP[demoKey];
+    const newUserId = crypto.randomUUID();
+    await seedDemoDataForUser(newUserId, demoKey, cleanEmail);
+
+    const { data: createdProf } = await supabase
+      .from('profiles')
+      .select('*')
+      .ilike('email', cleanEmail)
+      .maybeSingle();
+
+    profData = createdProf;
   }
 
-  // Profile
-  let profile: UserProfile | null = null;
-  if (profData) {
-    profile = {
-      id: profData.id,
-      name: profData.name || 'User',
-      role: profData.role || 'student'
-    };
-  } else {
-    const demoBundle = demoKey ? PERSONAS_MAP[demoKey] : null;
-    profile = {
-      id: userId,
-      name: demoBundle ? demoBundle.name : currentUser.user_metadata?.name || 'User',
-      role: demoBundle ? demoBundle.role : currentUser.user_metadata?.role || 'student'
-    };
+  if (!profData) {
+    return null;
   }
+
+  const userId = profData.id;
+
+  const profile: UserProfile = {
+    id: profData.id,
+    email: profData.email || cleanEmail,
+    name: profData.name || 'User',
+    role: profData.role || 'student'
+  };
 
   // Fetch Settings
   const { data: setData } = await supabase
@@ -174,7 +168,12 @@ export async function fetchUserData(currentUser: User): Promise<UserDataResult> 
     settings = PERSONAS_MAP[demoKey].settings;
   }
 
-  // Slots
+  // Fetch Slots
+  const { data: slotsData } = await supabase
+    .from('timetable_slots')
+    .select('*')
+    .eq('user_id', userId);
+
   let slots: TimetableSlot[] = [];
   if (slotsData && slotsData.length > 0) {
     slots = slotsData.map((s) => ({

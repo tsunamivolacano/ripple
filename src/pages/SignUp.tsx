@@ -1,85 +1,33 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { showSuccess, showError } from '@/utils/toast';
-import { Zap, GraduationCap, Briefcase, User, CheckCircle } from 'lucide-react';
+import { useRipple } from '@/context/RippleContext';
+import { Zap, GraduationCap, Briefcase, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export const SignUp: React.FC = () => {
   const navigate = useNavigate();
+  const { registerUser } = useRipple();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<'student' | 'corporate' | 'other'>('student');
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name.trim()) {
-      showError('Please enter your full name.');
-      return;
-    }
-    if (!email.trim()) {
-      showError('Please enter a valid email address.');
-      return;
-    }
-    if (password.length < 6) {
-      showError('Password must be at least 6 characters long.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      showError('Passwords do not match.');
+    if (!name.trim() || !email.trim()) {
       return;
     }
 
     setLoading(true);
+    const success = await registerUser(name, email, role);
+    setLoading(false);
 
-    // Default intensity mode based on role selection
-    const defaultIntensity = role === 'corporate' ? 'standard' : role === 'student' ? 'doomsday' : 'coach';
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-          role
-        }
-      }
-    });
-
-    if (error) {
-      showError(error.message || 'Failed to create account.');
-      setLoading(false);
-      return;
-    }
-
-    if (data.user) {
-      // Upsert profile and user_settings
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        name,
-        role
-      });
-
-      await supabase.from('user_settings').upsert({
-        user_id: data.user.id,
-        intensity_mode: defaultIntensity,
-        is_minor_profile: role === 'student',
-        weekly_digest_only: false,
-        personal_velocity_multiplier: 1.0
-      });
-
-      showSuccess('Account created! Welcome to RIPPLE.');
-      // Redirect new users into onboarding/timetable setup first!
+    if (success) {
       navigate('/?tab=timetable');
     }
-
-    setLoading(false);
   };
 
   return (
@@ -152,32 +100,6 @@ export const SignUp: React.FC = () => {
                     </button>
                   );
                 })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-300">Password</Label>
-                <Input
-                  type="password"
-                  placeholder="Min 6 chars"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-xs text-white placeholder:text-slate-600 h-10"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-300">Confirm Password</Label>
-                <Input
-                  type="password"
-                  placeholder="Re-enter password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-xs text-white placeholder:text-slate-600 h-10"
-                  required
-                />
               </div>
             </div>
 
