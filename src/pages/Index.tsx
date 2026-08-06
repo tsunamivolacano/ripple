@@ -12,7 +12,6 @@ import { EvidenceLogView } from '@/components/evidence/EvidenceLogView';
 import { DebtLedgerView } from '@/components/debt/DebtLedgerView';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
 import { Task } from '@/types/ripple';
-import { MadeWithDyad } from '@/components/made-with-dyad';
 
 const RippleAppContent: React.FC = () => {
   const {
@@ -58,11 +57,6 @@ const RippleAppContent: React.FC = () => {
 
         {activeTab === 'debt' && <DebtLedgerView />}
       </main>
-
-      {/* Footer Branding */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 py-4">
-        <MadeWithDyad />
-      </footer>
 
       {/* Modals & Overlays */}
       <PredictionView
