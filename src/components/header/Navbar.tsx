@@ -11,7 +11,8 @@ import {
   Plus, 
   LogOut,
   User,
-  ChevronDown
+  ChevronDown,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +32,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, currentUser, logout, loginDemoAccount } = useRipple();
+  const { debt, currentUser, logout, loginDemoAccount, startTutorial, hasCompletedTutorial } = useRipple();
 
   const activeDemoPersona = ALL_PERSONAS.find(p => p.id === currentUser?.demoPersonaId);
 
@@ -70,6 +71,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
           <div className="hidden md:flex items-center gap-3">
             <IntensitySelector />
 
+            {/* Interactive Tutorial Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={startTutorial}
+              className="border-indigo-500/40 bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-200 hover:text-white text-xs gap-1.5 px-3 font-semibold transition-all"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+              <span>{hasCompletedTutorial ? 'Replay Tutorial' : 'Start Tutorial'}</span>
+            </Button>
+
             {/* Persona Switcher / User Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -97,6 +109,16 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
                 <DropdownMenuLabel className="text-[11px] font-mono text-slate-400 uppercase tracking-wider px-2 py-1.5">
                   Logged in as {currentUser?.isDemo ? 'Demo Account' : currentUser?.email}
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-slate-800" />
+
+                <DropdownMenuItem
+                  onClick={startTutorial}
+                  className="cursor-pointer text-indigo-300 hover:bg-indigo-950/40 rounded-lg px-2.5 py-1.5 flex items-center gap-2 text-xs font-semibold"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
+                  Interactive Guided Tour
+                </DropdownMenuItem>
+
                 <DropdownMenuSeparator className="bg-slate-800" />
 
                 <DropdownMenuLabel className="text-[10px] text-slate-500 uppercase tracking-wider px-2 py-1">
@@ -176,6 +198,14 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
               </button>
             );
           })}
+
+          <button
+            onClick={startTutorial}
+            className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-300 bg-indigo-950/40 border border-indigo-500/30"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Tutorial</span>
+          </button>
         </nav>
       </div>
     </header>

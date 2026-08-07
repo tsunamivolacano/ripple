@@ -34,6 +34,16 @@ interface RippleContextType {
   activeTaskForPrediction: Task | null;
   activeFocusTask: Task | null;
   completedTaskForCelebration: Task | null;
+
+  // Tutorial State
+  isTutorialOpen: boolean;
+  currentTutorialStep: number;
+  hasCompletedTutorial: boolean;
+  startTutorial: () => void;
+  replayTutorial: () => void;
+  closeTutorial: () => void;
+  completeTutorial: () => void;
+  setTutorialStep: (step: number) => void;
   
   // Auth actions
   loginWithEmail: (email: string, password: string) => Promise<AuthResponse>;
@@ -124,6 +134,26 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
 
+  // Tutorial State
+  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
+  const [currentTutorialStep, setCurrentTutorialStep] = useState<number>(0);
+  const [hasCompletedTutorial, setHasCompletedTutorial] = useState<boolean>(() =>
+    safeGetLocalStorage(`ripple_tutorial_completed_${userKey}`, false)
+  );
+
+  // Auto prompt tutorial for first-time users upon login
+  useEffect(() => {
+    if (currentUser) {
+      const uKey = currentUser.id;
+      const completed = safeGetLocalStorage(`ripple_tutorial_completed_${uKey}`, false);
+      setHasCompletedTutorial(completed);
+      if (!completed) {
+        setIsTutorialOpen(true);
+        setCurrentTutorialStep(0);
+      }
+    }
+  }, [currentUser]);
+
   // Monitor Supabase Auth Session State Changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -189,8 +219,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetLocalStorage(`ripple_evidence_${currentUser.id}`, evidenceEntries);
       safeSetLocalStorage(`ripple_debt_${currentUser.id}`, debt);
       safeSetLocalStorage(`ripple_settings_${currentUser.id}`, settings);
+      safeSetLocalStorage(`ripple_tutorial_completed_${currentUser.id}`, hasCompletedTutorial);
     }
-  }, [slots, tasks, evidenceEntries, debt, settings, currentUser]);
+  }, [slots, tasks, evidenceEntries, debt, settings, hasCompletedTutorial, currentUser]);
 
   // Dynamic status updater ticker
   useEffect(() => {
@@ -205,6 +236,34 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, 30000);
     return () => clearInterval(timer);
   }, [settings.personalVelocityMultiplier]);
+
+  // Tutorial Controller Actions
+  const startTutorial = () => {
+    setCurrentTutorialStep(0);
+    setIsTutorialOpen(true);
+  };
+
+  const replayTutorial = () => {
+    setCurrentTutorialStep(0);
+    setIsTutorialOpen(true);
+  };
+
+  const closeTutorial = () => {
+    setIsTutorialOpen(false);
+  };
+
+  const completeTutorial = () => {
+    setHasCompletedTutorial(true);
+    setIsTutorialOpen(false);
+    if (currentUser) {
+      safeSetLocalStorage(`ripple_tutorial_completed_${currentUser.id}`, true);
+    }
+    showSuccess('Tutorial completed! You are ready to master RIPPLE.');
+  };
+
+  const setTutorialStep = (step: number) => {
+    setCurrentTutorialStep(step);
+  };
 
   // Auth Methods using Supabase Auth
   const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
@@ -447,6 +506,14 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         activeTaskForPrediction,
         activeFocusTask,
         completedTaskForCelebration,
+        isTutorialOpen,
+        currentTutorialStep,
+        hasCompletedTutorial,
+        startTutorial,
+        replayTutorial,
+        closeTutorial,
+        completeTutorial,
+        setTutorialStep,
         loginWithEmail,
         signUpWithEmail,
         loginDemoAccount,
