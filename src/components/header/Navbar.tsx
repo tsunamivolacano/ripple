@@ -5,6 +5,7 @@ import { ALL_PERSONAS } from '@/data/ripplePersonaData';
 import { 
   Zap, 
   Clock, 
+  CalendarDays,
   Calendar, 
   FileText, 
   TrendingDown, 
@@ -38,6 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
 
   const navItems = [
     { id: 'warroom', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
+    { id: 'calendar', label: 'Live Calendar', icon: CalendarDays },
     { id: 'timetable', label: 'Timetable & Context', icon: Calendar },
     { id: 'evidence', label: 'Evidence Case File', icon: FileText },
     { id: 'debt', label: 'Debt Ledger', icon: TrendingDown, badge: `${debt.totalHoursBehind}h` }
