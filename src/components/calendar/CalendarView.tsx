@@ -16,7 +16,8 @@ import {
   Filter, 
   Sparkles,
   AlertTriangle,
-  UserCheck
+  UserCheck,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,7 +36,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onOpenFocus,
   onOpenNewTaskModal
 }) => {
-  const { tasks, slots } = useRipple();
+  const { tasks, slots, deleteTask } = useRipple();
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -607,18 +608,33 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 Predict Forecast
               </Button>
 
-              <Button
-                size="sm"
-                onClick={() => {
-                  const t = selectedTask;
-                  setSelectedTask(null);
-                  onOpenFocus(t);
-                }}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs gap-1.5"
-              >
-                <Play className="w-3.5 h-3.5 fill-white" />
-                Start Focus Sprint
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    deleteTask(selectedTask.id);
+                    setSelectedTask(null);
+                  }}
+                  className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 text-xs gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const t = selectedTask;
+                    setSelectedTask(null);
+                    onOpenFocus(t);
+                  }}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs gap-1.5"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  Start Focus Sprint
+                </Button>
+              </div>
             </div>
           </DialogContent>
         )}

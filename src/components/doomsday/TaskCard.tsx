@@ -13,7 +13,8 @@ import {
   Briefcase,
   Calendar,
   CheckSquare,
-  Bell
+  Bell,
+  Trash2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,7 +32,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onOpenPrediction,
   onOpenFocus
 }) => {
-  const { completeTask } = useRipple();
+  const { completeTask, deleteTask } = useRipple();
   const theme = getStatusTheme(task.status);
   const timeInfo = getTimeRemaining(task.dueDate);
 
@@ -203,6 +204,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <CheckCircle2 className="w-4 h-4" />
           </Button>
         )}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => deleteTask(task.id)}
+          title="Delete Task"
+          className="text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 h-8 w-8 shrink-0"
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
       </div>
     </div>
   );
