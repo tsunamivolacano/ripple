@@ -85,9 +85,30 @@ interface RippleContextType {
   resetAllData: () => void;
 }
 
-const defaultPersona = PERSONAS_MAP['riya'];
+const emptyDebt: ProcrastinationDebt = {
+  totalHoursBehind: 0,
+  missedDeadlinesCount: 0,
+  streakDays: 0,
+  compoundingScore: 0,
+  weeklyDebtTrend: [
+    { day: 'Mon', debtHours: 0 },
+    { day: 'Tue', debtHours: 0 },
+    { day: 'Wed', debtHours: 0 },
+    { day: 'Thu', debtHours: 0 },
+    { day: 'Fri', debtHours: 0 },
+    { day: 'Sat', debtHours: 0 },
+    { day: 'Sun', debtHours: 0 }
+  ]
+};
 
-// Ephemeral Storage Helper for Local Accounts & Demo Mode
+const emptySettings: UserSettings = {
+  intensityMode: 'standard',
+  isMinorProfile: false,
+  weeklyDigestOnly: false,
+  personalVelocityMultiplier: 1.0
+};
+
+// Storage Helper
 function safeGetStorage<T>(key: string, fallback: T): T {
   try {
     const saved = localStorage.getItem(key) || sessionStorage.getItem(key);
@@ -145,11 +166,11 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
 
   const [currentPersonaId, setCurrentPersonaId] = useState<string>('riya');
-  const [slots, setSlots] = useState<TimetableSlot[]>(defaultPersona.slots);
-  const [tasks, setTasks] = useState<Task[]>(defaultPersona.tasks);
-  const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>(defaultPersona.evidenceEntries);
-  const [debt, setDebt] = useState<ProcrastinationDebt>(defaultPersona.debt);
-  const [settings, setSettings] = useState<UserSettings>(defaultPersona.settings);
+  const [slots, setSlots] = useState<TimetableSlot[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>([]);
+  const [debt, setDebt] = useState<ProcrastinationDebt>(emptyDebt);
+  const [settings, setSettings] = useState<UserSettings>(emptySettings);
 
   const [activeTaskForPrediction, setActiveTaskForPrediction] = useState<Task | null>(null);
   const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
@@ -160,7 +181,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [currentTutorialStep, setCurrentTutorialStep] = useState<number>(0);
   const [hasCompletedTutorial, setHasCompletedTutorial] = useState<boolean>(false);
 
-  // Load data for user
+  // Load data for user from Supabase
   const fetchUserDataFromSupabase = async (userId: string) => {
     setIsLoadingData(true);
     try {
@@ -187,7 +208,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }))
         );
       } else {
-        setSlots(safeGetStorage(`ripple_slots_${userId}`, defaultPersona.slots));
+        setSlots(safeGetStorage(`ripple_slots_${userId}`, []));
       }
 
       // 2. Fetch Tasks
@@ -217,7 +238,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }))
         );
       } else {
-        setTasks(safeGetStorage(`ripple_tasks_${userId}`, defaultPersona.tasks));
+        setTasks(safeGetStorage(`ripple_tasks_${userId}`, []));
       }
 
       // 3. Fetch Evidence Entries
@@ -244,7 +265,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }))
         );
       } else {
-        setEvidenceEntries(safeGetStorage(`ripple_evidence_${userId}`, defaultPersona.evidenceEntries));
+        setEvidenceEntries(safeGetStorage(`ripple_evidence_${userId}`, []));
       }
 
       // 4. Fetch User Settings
@@ -263,7 +284,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
         setHasCompletedTutorial(!!dbSettings.has_completed_tutorial);
       } else {
-        setSettings(safeGetStorage(`ripple_settings_${userId}`, defaultPersona.settings));
+        setSettings(safeGetStorage(`ripple_settings_${userId}`, emptySettings));
       }
 
       // 5. Fetch User Debt
@@ -282,7 +303,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           weeklyDebtTrend: Array.isArray(dbDebt.weekly_debt_trend) ? dbDebt.weekly_debt_trend : []
         });
       } else {
-        setDebt(safeGetStorage(`ripple_debt_${userId}`, defaultPersona.debt));
+        setDebt(safeGetStorage(`ripple_debt_${userId}`, emptyDebt));
       }
     } catch (err) {
       console.warn('Supabase tables not initialized or offline. Falling back to local data:', err);
@@ -327,7 +348,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const uKey = currentUser.id;
 
       if (currentUser.isDemo && currentUser.demoPersonaId) {
-        const persona = PERSONAS_MAP[currentUser.demoPersonaId] || defaultPersona;
+        const persona = PERSONAS_MAP[currentUser.demoPersonaId] || PERSONAS_MAP['riya'];
         setSlots(safeGetStorage(`ripple_slots_${uKey}`, persona.slots));
         setTasks(safeGetStorage(`ripple_tasks_${uKey}`, persona.tasks));
         setEvidenceEntries(safeGetStorage(`ripple_evidence_${uKey}`, persona.evidenceEntries));
@@ -337,11 +358,11 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const comp = safeGetStorage(`ripple_tutorial_completed_${uKey}`, false);
         setHasCompletedTutorial(comp);
       } else if (currentUser.isLocalSession) {
-        setSlots(safeGetStorage(`ripple_slots_${uKey}`, defaultPersona.slots));
-        setTasks(safeGetStorage(`ripple_tasks_${uKey}`, defaultPersona.tasks));
-        setEvidenceEntries(safeGetStorage(`ripple_evidence_${uKey}`, defaultPersona.evidenceEntries));
-        setDebt(safeGetStorage(`ripple_debt_${uKey}`, defaultPersona.debt));
-        setSettings(safeGetStorage(`ripple_settings_${uKey}`, defaultPersona.settings));
+        setSlots(safeGetStorage(`ripple_slots_${uKey}`, []));
+        setTasks(safeGetStorage(`ripple_tasks_${uKey}`, []));
+        setEvidenceEntries(safeGetStorage(`ripple_evidence_${uKey}`, []));
+        setDebt(safeGetStorage(`ripple_debt_${uKey}`, emptyDebt));
+        setSettings(safeGetStorage(`ripple_settings_${uKey}`, emptySettings));
         setHasCompletedTutorial(safeGetStorage(`ripple_tutorial_completed_${uKey}`, false));
       } else {
         fetchUserDataFromSupabase(currentUser.id);
@@ -410,7 +431,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentTutorialStep(step);
   };
 
-  // Login Handler - Completely eliminates confirmation blocks and rate-limit blocks
+  // Login Handler
   const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
@@ -418,7 +439,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      // 1. Try Supabase Auth first
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password
@@ -436,7 +456,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return { success: true };
       }
 
-      // 2. If rate limited (429) or unconfirmed email / invalid credentials (400), create local account session
       if (error) {
         console.warn('Supabase Auth error/rate-limit. Provisioning local user session:', error.message);
       }
@@ -444,7 +463,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.warn('Auth exception, creating local user session:', e);
     }
 
-    // Provision local user account seamlessly
     const localId = getLocalUserId(cleanEmail);
     const localAcc: UserAccount = {
       id: localId,
@@ -489,7 +507,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.warn('Signup exception, creating local user session:', e);
     }
 
-    // Provision local account seamlessly
     const localId = getLocalUserId(cleanEmail);
     const localAcc: UserAccount = {
       id: localId,
@@ -504,7 +521,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const loginDemoAccount = (personaId: string) => {
-    const persona = PERSONAS_MAP[personaId] || defaultPersona;
+    const persona = PERSONAS_MAP[personaId] || PERSONAS_MAP['riya'];
     const account: UserAccount = {
       id: `demo_${persona.id}`,
       email: `${persona.id}@demo.ripple`,
@@ -529,6 +546,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setSlots([]);
       setTasks([]);
       setEvidenceEntries([]);
+      setDebt(emptyDebt);
+      setSettings(emptySettings);
       setActiveTaskForPrediction(null);
       setActiveFocusTask(null);
       setCompletedTaskForCelebration(null);
@@ -668,7 +687,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setDebt((d) => ({
               ...d,
               streakDays: d.streakDays + 1,
-              compoundingScore: Math.max(10, d.compoundingScore - 5)
+              compoundingScore: Math.max(0, d.compoundingScore - 5)
             }));
           }
 
@@ -806,7 +825,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const loadPersonaData = (personaId: string) => {
-    const bundle = PERSONAS_MAP[personaId] || defaultPersona;
+    const bundle = PERSONAS_MAP[personaId] || PERSONAS_MAP['riya'];
     setCurrentPersonaId(bundle.id);
     setSlots(bundle.slots);
     setTasks(bundle.tasks);
@@ -820,13 +839,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSlots([]);
     setTasks([]);
     setEvidenceEntries([]);
-    setDebt({
-      totalHoursBehind: 0,
-      missedDeadlinesCount: 0,
-      streakDays: 0,
-      compoundingScore: 0,
-      weeklyDebtTrend: []
-    });
+    setDebt(emptyDebt);
     showSuccess('All data reset.');
   };
 
