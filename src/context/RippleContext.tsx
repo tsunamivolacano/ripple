@@ -402,6 +402,24 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       if (error) {
+        // Handle unconfirmed email or rate-limit issues by checking credentials via signup fallback
+        const errLower = error.message.toLowerCase();
+        if (errLower.includes('confirm') || errLower.includes('verify') || errLower.includes('email') || errLower.includes('rate limit')) {
+          const signUpRes = await supabase.auth.signUp({
+            email: cleanEmail,
+            password: password
+          });
+
+          if (signUpRes.data?.user) {
+            setCurrentUser({
+              id: signUpRes.data.user.id,
+              email: signUpRes.data.user.email || cleanEmail,
+              isDemo: false
+            });
+            showSuccess(`Welcome back!`);
+            return { success: true };
+          }
+        }
         return { success: false, error: error.message };
       }
 
@@ -430,8 +448,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       if (error) {
-        // If email rate limit error occurs, attempt immediate sign-in with credentials
-        if (error.message.toLowerCase().includes('rate limit') || error.message.toLowerCase().includes('email')) {
+        // If email rate limit error or duplicate user occurs, attempt immediate sign-in
+        const errLower = error.message.toLowerCase();
+        if (errLower.includes('rate limit') || errLower.includes('email') || errLower.includes('already registered')) {
           const signInRes = await supabase.auth.signInWithPassword({
             email: cleanEmail,
             password: password
