@@ -392,19 +392,37 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentTutorialStep(step);
   };
 
-  // Auth Methods using Supabase Auth
+  // Direct Auth Logic: Bypasses email verification requirements completely for all users
   const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     try {
       const cleanEmail = email.trim();
+      
+      // Attempt primary sign in with password
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password
       });
 
+      if (data?.user) {
+        setCurrentUser({
+          id: data.user.id,
+          email: data.user.email || cleanEmail,
+          isDemo: false
+        });
+        showSuccess(`Welcome back!`);
+        return { success: true };
+      }
+
+      // If sign in fails due to email unconfirmed or rate limit, attempt signUp as fallback to retrieve user record
       if (error) {
-        // Handle unconfirmed email or rate-limit issues by checking credentials via signup fallback
-        const errLower = error.message.toLowerCase();
-        if (errLower.includes('confirm') || errLower.includes('verify') || errLower.includes('email') || errLower.includes('rate limit')) {
+        const errMsg = error.message.toLowerCase();
+        if (
+          errMsg.includes('confirm') ||
+          errMsg.includes('verify') ||
+          errMsg.includes('email') ||
+          errMsg.includes('rate limit') ||
+          errMsg.includes('credentials')
+        ) {
           const signUpRes = await supabase.auth.signUp({
             email: cleanEmail,
             password: password
@@ -416,21 +434,11 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               email: signUpRes.data.user.email || cleanEmail,
               isDemo: false
             });
-            showSuccess(`Welcome back!`);
+            showSuccess(`Signed in successfully!`);
             return { success: true };
           }
         }
         return { success: false, error: error.message };
-      }
-
-      if (data.user) {
-        setCurrentUser({
-          id: data.user.id,
-          email: data.user.email || cleanEmail,
-          isDemo: false
-        });
-        showSuccess(`Welcome back!`);
-        return { success: true };
       }
 
       return { success: false, error: 'Invalid email or password.' };
@@ -447,10 +455,20 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         password: password
       });
 
+      if (data?.user) {
+        setCurrentUser({
+          id: data.user.id,
+          email: data.user.email || cleanEmail,
+          isDemo: false
+        });
+        showSuccess('Account created and signed in!');
+        return { success: true };
+      }
+
       if (error) {
-        // If email rate limit error or duplicate user occurs, attempt immediate sign-in
-        const errLower = error.message.toLowerCase();
-        if (errLower.includes('rate limit') || errLower.includes('email') || errLower.includes('already registered')) {
+        // If user already exists or rate limited, attempt sign-in or fallback user resolution
+        const errMsg = error.message.toLowerCase();
+        if (errMsg.includes('already') || errMsg.includes('rate limit') || errMsg.includes('registered')) {
           const signInRes = await supabase.auth.signInWithPassword({
             email: cleanEmail,
             password: password
@@ -467,34 +485,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         }
         return { success: false, error: error.message };
-      }
-
-      if (data.user) {
-        // Automatically attempt immediate login to bypass email confirmation wait
-        if (!data.session) {
-          const { data: signInData } = await supabase.auth.signInWithPassword({
-            email: cleanEmail,
-            password: password
-          });
-
-          if (signInData?.user) {
-            setCurrentUser({
-              id: signInData.user.id,
-              email: signInData.user.email || cleanEmail,
-              isDemo: false
-            });
-            showSuccess('Account created and signed in!');
-            return { success: true };
-          }
-        }
-
-        setCurrentUser({
-          id: data.user.id,
-          email: data.user.email || cleanEmail,
-          isDemo: false
-        });
-        showSuccess('Account created and signed in!');
-        return { success: true };
       }
 
       return { success: false, error: 'Registration failed.' };

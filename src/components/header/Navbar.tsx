@@ -69,8 +69,8 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
             </div>
           </div>
 
-          {/* Quick Action Center */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* Header Action Controls */}
+          <div className="flex items-center gap-2.5">
             <IntensitySelector />
 
             {/* Interactive Tutorial Button */}
@@ -78,29 +78,29 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
               variant="outline"
               size="sm"
               onClick={startTutorial}
-              className="border-indigo-500/40 bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-200 hover:text-white text-xs gap-1.5 px-3 font-semibold transition-all"
+              className="hidden lg:flex border-indigo-500/40 bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-200 hover:text-white text-xs gap-1.5 px-3 font-semibold transition-all"
             >
               <HelpCircle className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-              <span>{hasCompletedTutorial ? 'Replay Tutorial' : 'Start Tutorial'}</span>
+              <span>{hasCompletedTutorial ? 'Tutorial' : 'Start Tour'}</span>
             </Button>
 
-            {/* Persona Switcher / User Profile Dropdown */}
+            {/* User Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-200 gap-2"
+                  className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-200 gap-1.5 px-2.5"
                 >
                   {currentUser?.isDemo ? (
                     <>
                       <span className="text-sm">{activeDemoPersona?.avatarBadge || '👤'}</span>
-                      <span className="font-semibold">{activeDemoPersona?.name || 'Demo'}</span>
+                      <span className="font-semibold hidden sm:inline">{activeDemoPersona?.name || 'Demo'}</span>
                     </>
                   ) : (
                     <>
                       <User className="w-3.5 h-3.5 text-rose-400" />
-                      <span className="font-semibold truncate max-w-[120px]">{currentUser?.email}</span>
+                      <span className="font-semibold truncate max-w-[100px] hidden sm:inline">{currentUser?.email}</span>
                     </>
                   )}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -164,14 +164,26 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Direct Prominent Sign Out Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={logout}
+              className="border-rose-500/40 bg-rose-950/20 hover:bg-rose-900/40 text-rose-300 hover:text-white text-xs font-semibold gap-1.5 px-3 py-1.5 h-9"
+              title="Sign Out of Dashboard"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </Button>
+
             <Button
               data-tour="new-task-btn"
               size="sm"
               onClick={onOpenNewTaskModal}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs gap-1.5 shadow-md shadow-rose-950"
+              className="bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs gap-1.5 shadow-md shadow-rose-950 h-9"
             >
               <Plus className="w-4 h-4" />
-              New Task
+              <span className="hidden xs:inline">New Task</span>
             </Button>
           </div>
         </div>
