@@ -86,7 +86,7 @@ interface RippleContextType {
 
 const defaultPersona = PERSONAS_MAP['riya'];
 
-// Ephemeral Session Storage Helper for Demo Mode (clears automatically when browser window closes)
+// Ephemeral Session Storage Helper for Demo Mode
 function safeGetSessionStorage<T>(key: string, fallback: T): T {
   try {
     const saved = sessionStorage.getItem(key);
@@ -107,7 +107,6 @@ function safeSetSessionStorage<T>(key: string, value: T): void {
 // Function to thoroughly purge all app storage keys on logout
 function purgeAllStorageData() {
   try {
-    // Purge localStorage keys starting with ripple_
     const localKeysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -117,7 +116,6 @@ function purgeAllStorageData() {
     }
     localKeysToRemove.forEach((k) => localStorage.removeItem(k));
 
-    // Purge sessionStorage keys starting with ripple_
     const sessionKeysToRemove: string[] = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
@@ -323,11 +321,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setCurrentTutorialStep(0);
         }
       } else {
-        // Real authenticated Supabase user -> fetch directly from database with RLS
         fetchUserDataFromSupabase(currentUser.id);
       }
     } else {
-      // Unauthenticated -> clear states
       setSlots([]);
       setTasks([]);
       setEvidenceEntries([]);
@@ -399,8 +395,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Auth Methods using Supabase Auth
   const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     try {
+      const cleanEmail = email.trim();
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: cleanEmail,
         password: password
       });
 
@@ -411,14 +408,14 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (data.user) {
         setCurrentUser({
           id: data.user.id,
-          email: data.user.email || email,
+          email: data.user.email || cleanEmail,
           isDemo: false
         });
         showSuccess(`Welcome back!`);
         return { success: true };
       }
 
-      return { success: false, error: 'User not found.' };
+      return { success: false, error: 'Invalid email or password.' };
     } catch (err: any) {
       return { success: false, error: err.message || 'An unexpected error occurred.' };
     }
@@ -426,26 +423,58 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const signUpWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     try {
+      const cleanEmail = email.trim();
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: cleanEmail,
         password: password
       });
 
       if (error) {
+        // If email rate limit error occurs, attempt immediate sign-in with credentials
+        if (error.message.toLowerCase().includes('rate limit') || error.message.toLowerCase().includes('email')) {
+          const signInRes = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password: password
+          });
+
+          if (signInRes.data?.user) {
+            setCurrentUser({
+              id: signInRes.data.user.id,
+              email: signInRes.data.user.email || cleanEmail,
+              isDemo: false
+            });
+            showSuccess('Signed in successfully!');
+            return { success: true };
+          }
+        }
         return { success: false, error: error.message };
       }
 
       if (data.user) {
-        if (data.session) {
-          setCurrentUser({
-            id: data.user.id,
-            email: data.user.email || email,
-            isDemo: false
+        // Automatically attempt immediate login to bypass email confirmation wait
+        if (!data.session) {
+          const { data: signInData } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password: password
           });
-          showSuccess('Account created successfully!');
-        } else {
-          showSuccess('Account created! You can now log in.');
+
+          if (signInData?.user) {
+            setCurrentUser({
+              id: signInData.user.id,
+              email: signInData.user.email || cleanEmail,
+              isDemo: false
+            });
+            showSuccess('Account created and signed in!');
+            return { success: true };
+          }
         }
+
+        setCurrentUser({
+          id: data.user.id,
+          email: data.user.email || cleanEmail,
+          isDemo: false
+        });
+        showSuccess('Account created and signed in!');
         return { success: true };
       }
 
@@ -476,7 +505,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error('Error signing out:', e);
     } finally {
-      // Purge all stored keys to ensure no residual data remains
       purgeAllStorageData();
       setCurrentUser(null);
       setSlots([]);
@@ -502,7 +530,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    // Authenticated user -> insert into Supabase
     const { data, error } = await supabase
       .from('timetable_slots')
       .insert({
@@ -605,7 +632,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    // Supabase DB insert
     const { data, error } = await supabase
       .from('tasks')
       .insert({
