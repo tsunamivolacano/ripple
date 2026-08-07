@@ -6,10 +6,7 @@ import {
   Plus, 
   Star, 
   CheckCircle2, 
-  AlertCircle, 
-  UserCheck, 
-  Award,
-  Calendar
+  Award 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +25,7 @@ export const EvidenceLogView: React.FC = () => {
     : '5.0';
 
   return (
-    <div className="space-y-6">
+    <div data-tour="evidence-section" className="space-y-6">
       {/* Top Banner & Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">

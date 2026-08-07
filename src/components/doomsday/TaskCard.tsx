@@ -4,13 +4,11 @@ import { useRipple } from '@/context/RippleContext';
 import { getStatusTheme, getTimeRemaining } from '@/utils/timeUtils';
 import { DoomsdayGauge } from './DoomsdayGauge';
 import { 
-  AlertTriangle, 
   Zap, 
   Play, 
   UserCheck, 
   GraduationCap, 
-  CheckCircle2, 
-  SlidersHorizontal 
+  CheckCircle2 
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,7 +36,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const bufferPercentage = Math.min(100, Math.round((timeBufferRatio / 3.0) * 100));
 
   return (
-    <div className={`relative rounded-2xl border p-5 transition-all duration-300 bg-gradient-to-b ${theme.gradient} border-slate-800 hover:border-slate-700 shadow-xl flex flex-col justify-between group`}>
+    <div data-tour="task-card" className={`relative rounded-2xl border p-5 transition-all duration-300 bg-gradient-to-b ${theme.gradient} border-slate-800 hover:border-slate-700 shadow-xl flex flex-col justify-between group`}>
       {/* Top Header Row */}
       <div>
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -62,7 +60,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
 
           {/* Mini Gauge Display */}
-          <div className="shrink-0 cursor-pointer" onClick={() => onOpenPrediction(task)}>
+          <div data-tour="gauge-element" className="shrink-0 cursor-pointer" onClick={() => onOpenPrediction(task)}>
             <DoomsdayGauge
               status={task.status}
               percentageRemaining={bufferPercentage}
@@ -129,6 +127,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       {/* Action Footer Buttons */}
       <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
         <Button
+          data-tour="predict-btn"
           variant="outline"
           size="sm"
           onClick={() => onOpenPrediction(task)}
@@ -139,6 +138,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         </Button>
 
         <Button
+          data-tour="start-btn"
           size="sm"
           onClick={() => onOpenFocus(task)}
           className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold gap-1.5 py-1.5 h-auto"

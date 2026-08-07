@@ -2,19 +2,13 @@ import React from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { 
   TrendingDown, 
-  Flame, 
-  AlertOctagon, 
-  RotateCcw, 
-  CheckCircle2, 
-  Zap, 
   Sparkles,
   ShieldCheck
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export const DebtLedgerView: React.FC = () => {
-  const { debt, updateSettings } = useRipple();
+  const { debt } = useRipple();
 
   const getRiskBadge = () => {
     if (debt.compoundingScore > 70) {
@@ -27,7 +21,7 @@ export const DebtLedgerView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-tour="debt-section" className="space-y-6">
       {/* Top Banner Overview */}
       <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-950/60 via-slate-900 to-slate-950 border border-purple-500/30 space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

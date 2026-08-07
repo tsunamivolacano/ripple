@@ -11,7 +11,7 @@ import { TimetableGrid } from '@/components/timetable/TimetableGrid';
 import { EvidenceLogView } from '@/components/evidence/EvidenceLogView';
 import { DebtLedgerView } from '@/components/debt/DebtLedgerView';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
-import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
+import { ProductTour } from '@/components/tutorial/ProductTour';
 import { Task } from '@/types/ripple';
 
 const RippleAppContent: React.FC = () => {
@@ -59,8 +59,8 @@ const RippleAppContent: React.FC = () => {
         {activeTab === 'debt' && <DebtLedgerView />}
       </main>
 
-      {/* Interactive Onboarding Walkthrough Tutorial */}
-      <TutorialOverlay onTabChange={(tab) => setActiveTab(tab)} />
+      {/* Interactive Onboarding Product Tour */}
+      <ProductTour onTabChange={(tab) => setActiveTab(tab)} />
 
       {/* Modals & Overlays */}
       <PredictionView

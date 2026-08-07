@@ -163,6 +163,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
             </DropdownMenu>
 
             <Button
+              data-tour="new-task-btn"
               size="sm"
               onClick={onOpenNewTaskModal}
               className="bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs gap-1.5 shadow-md shadow-rose-950"

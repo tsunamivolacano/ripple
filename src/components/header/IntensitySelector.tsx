@@ -62,7 +62,7 @@ export const IntensitySelector: React.FC = () => {
 
   return (
     <>
-      <div onClick={() => setIsOpen(true)}>
+      <div data-tour="intensity-mode" onClick={() => setIsOpen(true)}>
         {getModeBadge()}
       </div>
 

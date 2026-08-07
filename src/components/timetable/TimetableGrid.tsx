@@ -7,9 +7,7 @@ import {
   Plus, 
   UserCheck, 
   Edit3, 
-  Trash2, 
-  GraduationCap, 
-  Sparkles 
+  Trash2 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +22,7 @@ export const TimetableGrid: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div data-tour="timetable-section" className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
         <div>
           <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
