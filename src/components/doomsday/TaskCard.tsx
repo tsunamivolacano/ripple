@@ -8,7 +8,12 @@ import {
   Play, 
   UserCheck, 
   GraduationCap, 
-  CheckCircle2 
+  CheckCircle2,
+  User,
+  Briefcase,
+  Calendar,
+  CheckSquare,
+  Bell
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +35,29 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const theme = getStatusTheme(task.status);
   const timeInfo = getTimeRemaining(task.dueDate);
 
+  const isPersonal = task.category === 'personal' || !slot || ['personal', 'meeting', 'appointment', 'reminder', 'event', 'chore'].includes(task.taskType);
+
+  // Helper icon for task type
+  const getTypeBadge = () => {
+    switch (task.taskType) {
+      case 'meeting':
+        return { label: 'Meeting', icon: Briefcase, color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' };
+      case 'appointment':
+        return { label: 'Appointment', icon: Calendar, color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' };
+      case 'chore':
+        return { label: 'Chore', icon: CheckSquare, color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' };
+      case 'reminder':
+      case 'event':
+        return { label: task.taskType.toUpperCase(), icon: Bell, color: 'bg-purple-500/20 text-purple-300 border-purple-500/40' };
+      case 'personal':
+        return { label: 'Personal', icon: User, color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' };
+      default:
+        return null;
+    }
+  };
+
+  const typeBadge = getTypeBadge();
+
   // Buffer percentage calculation (0 to 100)
   const remainingWorkMinutes = task.estimatedHours * (1 - task.completionPercentage / 100) * 60;
   const timeBufferRatio = Math.max(0, timeInfo.totalMinutes / Math.max(remainingWorkMinutes, 15));
@@ -46,10 +74,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 {theme.label}
               </Badge>
 
-              {slot && (
+              {slot ? (
                 <Badge variant="outline" className="bg-slate-900/80 text-slate-300 border-slate-700 text-[11px] gap-1">
                   <GraduationCap className="w-3 h-3 text-indigo-400" />
                   {slot.subject}
+                </Badge>
+              ) : typeBadge ? (
+                <Badge variant="outline" className={`${typeBadge.color} text-[11px] gap-1`}>
+                  <typeBadge.icon className="w-3 h-3" />
+                  {typeBadge.label}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-slate-900/80 text-slate-300 border-slate-700 text-[11px] gap-1">
+                  <User className="w-3 h-3 text-indigo-400" />
+                  Personal
                 </Badge>
               )}
             </div>
@@ -80,7 +118,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {/* Human Context & Teacher Strictness Info */}
-        {slot && (
+        {slot ? (
           <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800/80 text-xs space-y-1.5 mb-4">
             <div className="flex items-center justify-between text-slate-300">
               <span className="flex items-center gap-1.5 font-medium">
@@ -100,6 +138,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 {slot.stakesTag.replace('_', ' ')}
               </span>
             </div>
+          </div>
+        ) : (
+          <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800/80 text-xs mb-4 flex items-center justify-between text-slate-400 font-mono">
+            <span>Due Local:</span>
+            <span className="text-slate-200 font-bold">
+              {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
           </div>
         )}
 

@@ -146,8 +146,21 @@ const riyaBundle: FullPersonaBundle = {
       estimatedHours: 2.0,
       completionPercentage: 20,
       taskType: 'problem_set',
+      category: 'academic',
       status: 'critical',
       createdAt: hoursAgo(20)
+    },
+    {
+      id: 'riya-task-personal-1',
+      title: 'Dentist Checkup & Orthodontist Appointment',
+      description: 'Routine teeth cleaning and brace wire adjustment at Dental Care Clinic.',
+      dueDate: hoursFromNow(5.0),
+      estimatedHours: 1.5,
+      completionPercentage: 0,
+      taskType: 'appointment',
+      category: 'personal',
+      status: 'tight',
+      createdAt: hoursAgo(10)
     },
     {
       id: 'riya-task-2',
@@ -158,6 +171,7 @@ const riyaBundle: FullPersonaBundle = {
       estimatedHours: 1.5,
       completionPercentage: 50,
       taskType: 'lab_report',
+      category: 'academic',
       status: 'tight',
       createdAt: hoursAgo(12)
     },
@@ -170,6 +184,7 @@ const riyaBundle: FullPersonaBundle = {
       estimatedHours: 3.0,
       completionPercentage: 0,
       taskType: 'revision',
+      category: 'academic',
       status: 'manageable',
       createdAt: hoursAgo(5)
     },
@@ -182,6 +197,7 @@ const riyaBundle: FullPersonaBundle = {
       estimatedHours: 2.5,
       completionPercentage: 40,
       taskType: 'essay',
+      category: 'academic',
       status: 'too_late',
       createdAt: hoursAgo(30)
     }
@@ -295,8 +311,21 @@ const amanBundle: FullPersonaBundle = {
       estimatedHours: 3.5,
       completionPercentage: 45,
       taskType: 'project',
+      category: 'academic',
       status: 'critical',
       createdAt: hoursAgo(18)
+    },
+    {
+      id: 'aman-task-personal-1',
+      title: 'Quarterly Car Service & Oil Change Sync',
+      description: 'Drop off vehicle at Honda Service Station and confirm pickup window.',
+      dueDate: hoursFromNow(8.0),
+      estimatedHours: 1.0,
+      completionPercentage: 0,
+      taskType: 'chore',
+      category: 'personal',
+      status: 'manageable',
+      createdAt: hoursAgo(4)
     },
     {
       id: 'aman-task-demo',
@@ -307,6 +336,7 @@ const amanBundle: FullPersonaBundle = {
       estimatedHours: 1.0,
       completionPercentage: 70,
       taskType: 'revision',
+      category: 'academic',
       status: 'tight',
       createdAt: hoursAgo(10)
     }
@@ -407,8 +437,21 @@ const kabirBundle: FullPersonaBundle = {
       estimatedHours: 0.75,
       completionPercentage: 30,
       taskType: 'problem_set',
+      category: 'academic',
       status: 'critical',
       createdAt: hoursAgo(8)
+    },
+    {
+      id: 'kabir-task-personal-1',
+      title: 'Practice Piano Recital Pieces (15 mins)',
+      description: 'Practice Beethoven Fur Elise intro for Friday evening music recital.',
+      dueDate: hoursFromNow(6.0),
+      estimatedHours: 0.5,
+      completionPercentage: 0,
+      taskType: 'personal',
+      category: 'personal',
+      status: 'manageable',
+      createdAt: hoursAgo(2)
     },
     {
       id: 'kabir-task-evsmodel',
@@ -419,6 +462,7 @@ const kabirBundle: FullPersonaBundle = {
       estimatedHours: 1.2,
       completionPercentage: 50,
       taskType: 'lab_report',
+      category: 'academic',
       status: 'tight',
       createdAt: hoursAgo(14)
     }

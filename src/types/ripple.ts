@@ -18,7 +18,21 @@ export type IntensityMode = 'coach' | 'standard' | 'doomsday';
 
 export type TaskStatus = 'manageable' | 'tight' | 'critical' | 'too_late' | 'completed' | 'renegotiated';
 
-export type TaskType = 'essay' | 'lab_report' | 'reading' | 'problem_set' | 'revision' | 'project';
+export type TaskType = 
+  | 'essay' 
+  | 'lab_report' 
+  | 'reading' 
+  | 'problem_set' 
+  | 'revision' 
+  | 'project'
+  | 'personal'
+  | 'meeting'
+  | 'appointment'
+  | 'reminder'
+  | 'event'
+  | 'chore';
+
+export type TaskCategory = 'academic' | 'personal';
 
 export interface TimetableSlot {
   id: string;
@@ -43,6 +57,7 @@ export interface Task {
   estimatedHours: number;
   completionPercentage: number;
   taskType: TaskType;
+  category?: TaskCategory;
   status: TaskStatus;
   createdAt: string;
   completedAt?: string;

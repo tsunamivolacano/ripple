@@ -10,7 +10,9 @@ import {
   Plus, 
   Sparkles, 
   ShieldAlert,
-  Search
+  Search,
+  GraduationCap,
+  User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,13 +29,20 @@ export const WarRoom: React.FC<WarRoomProps> = ({
   onOpenFocus,
   onOpenNewTaskModal
 }) => {
-  const { tasks, slots, debt } = useRipple();
+  const { tasks, slots } = useRipple();
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'academic' | 'personal'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter tasks
   const activeTasks = tasks.filter((t) => {
     if (t.status === 'completed') return false;
+    
+    // Category check
+    const isPersonal = t.category === 'personal' || !t.slotId || ['personal', 'meeting', 'appointment', 'reminder', 'event', 'chore'].includes(t.taskType);
+    if (categoryFilter === 'academic' && isPersonal) return false;
+    if (categoryFilter === 'personal' && !isPersonal) return false;
+
     const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase());
     if (filterStatus === 'all') return matchesSearch;
     return t.status === filterStatus && matchesSearch;
@@ -59,7 +68,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
                 <Badge className="bg-rose-500/30 text-rose-200 border-rose-500/50">Urgent</Badge>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
-                Immediate intervention required. Delaying will trigger severe academic & emotional domino consequences.
+                Immediate intervention required. Delaying will trigger severe academic, personal, or emotional domino consequences.
               </p>
             </div>
           </div>
@@ -79,21 +88,42 @@ export const WarRoom: React.FC<WarRoomProps> = ({
       )}
 
       {/* Control Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-        <div className="relative flex-1">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <Input
-            placeholder="Search active tasks or subjects..."
+            placeholder="Search active tasks, activities, or subjects..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 bg-slate-950/80 border-slate-800 text-xs text-white placeholder:text-slate-500"
           />
         </div>
 
-        {/* Filter Buttons */}
+        {/* Category Filters */}
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+          {[
+            { id: 'all', label: 'All Activities' },
+            { id: 'academic', label: 'Academic' },
+            { id: 'personal', label: 'Personal / Life' }
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setCategoryFilter(cat.id as any)}
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                categoryFilter === cat.id
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Status Filter Buttons */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {[
-            { id: 'all', label: 'All Tasks' },
+            { id: 'all', label: 'All Status' },
             { id: 'critical', label: 'Critical' },
             { id: 'tight', label: 'Tight' },
             { id: 'manageable', label: 'Manageable' },
@@ -135,9 +165,9 @@ export const WarRoom: React.FC<WarRoomProps> = ({
           <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
             <Clock className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-white">No active tasks in this view</h3>
+          <h3 className="text-base font-bold text-white">No active activities found</h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            You are currently clear of impending consequence alerts. Click below to add a new task tied to your schedule.
+            You are clear of impending consequence alerts in this filter view. Add a new task or personal activity below.
           </p>
           <Button
             size="sm"
@@ -145,7 +175,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             className="bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs gap-1.5 mt-2"
           >
             <Plus className="w-4 h-4" />
-            Add New Task
+            Add New Activity
           </Button>
         </div>
       )}

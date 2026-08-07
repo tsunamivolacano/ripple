@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
-import { TaskType } from '@/types/ripple';
-import { Plus, Clock, GraduationCap } from 'lucide-react';
+import { TaskType, TaskCategory } from '@/types/ripple';
+import { Plus, Clock, GraduationCap, User, Calendar, Briefcase, CheckSquare, Bell } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,30 +16,55 @@ interface NewTaskModalProps {
 export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) => {
   const { addTask, slots } = useRipple();
 
+  const [category, setCategory] = useState<TaskCategory>('academic');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [slotId, setSlotId] = useState(slots[0]?.id || '');
+  
+  // Due date & time setup
+  const [dueOption, setDueOption] = useState<'hours' | 'custom'>('hours');
   const [hoursLeft, setHoursLeft] = useState(4);
-  const [estimatedHours, setEstimatedHours] = useState(2.0);
+  const [customDate, setCustomDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
+  const [customTime, setCustomTime] = useState('18:00');
+
+  const [estimatedHours, setEstimatedHours] = useState(1.0);
   const [taskType, setTaskType] = useState<TaskType>('problem_set');
+
+  const handleCategoryChange = (cat: TaskCategory) => {
+    setCategory(cat);
+    if (cat === 'personal') {
+      setTaskType('personal');
+    } else {
+      setTaskType('problem_set');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title) return;
+    if (!title.trim()) return;
 
-    const dueDate = new Date(Date.now() + hoursLeft * 3600 * 1000).toISOString();
+    let dueDateISO = new Date().toISOString();
+    if (dueOption === 'hours') {
+      dueDateISO = new Date(Date.now() + hoursLeft * 3600 * 1000).toISOString();
+    } else {
+      dueDateISO = new Date(`${customDate}T${customTime}:00`).toISOString();
+    }
 
     addTask({
       title,
       description,
-      slotId,
-      dueDate,
+      slotId: category === 'academic' ? slotId : undefined,
+      dueDate: dueDateISO,
       estimatedHours,
       completionPercentage: 0,
-      taskType
+      taskType,
+      category
     });
 
-    // Reset
+    // Reset Form
     setTitle('');
     setDescription('');
     onClose();
@@ -51,15 +76,48 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
         <DialogHeader>
           <DialogTitle className="text-lg font-bold flex items-center gap-2">
             <Plus className="w-5 h-5 text-rose-500" />
-            Add New Task to War Room
+            Add Activity to War Room & Calendar
           </DialogTitle>
         </DialogHeader>
 
+        {/* Category Switcher Tabs */}
+        <div className="grid grid-cols-2 bg-slate-900 p-1 rounded-xl border border-slate-800 my-2">
+          <button
+            type="button"
+            onClick={() => handleCategoryChange('academic')}
+            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all ${
+              category === 'academic'
+                ? 'bg-rose-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <GraduationCap className="w-4 h-4" />
+            Academic Task
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleCategoryChange('personal')}
+            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all ${
+              category === 'personal'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            Personal / General
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4 my-2">
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-300">Task Title</label>
+            <label className="text-xs font-semibold text-slate-300">Title</label>
             <Input
-              placeholder="e.g. Physics Numerical Homework"
+              placeholder={
+                category === 'academic'
+                  ? 'e.g. Physics Numerical Homework'
+                  : 'e.g. Doctor Appointment / Team Sync'
+              }
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
@@ -67,68 +125,147 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
             />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-300">Link to Timetable Slot / Subject</label>
-            <Select value={slotId} onValueChange={setSlotId}>
-              <SelectTrigger className="bg-slate-900 border-slate-800 text-xs text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
-                {slots.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.subject} ({s.teacherName} • {s.strictnessTag.replace('_', ' ')})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          {category === 'academic' ? (
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300">Hours Until Deadline</label>
-              <Input
-                type="number"
-                step="0.5"
-                min="0.5"
-                value={hoursLeft}
-                onChange={(e) => setHoursLeft(Number(e.target.value))}
-                className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
-              />
+              <label className="text-xs font-semibold text-slate-300">Link to Timetable Slot / Subject</label>
+              <Select value={slotId} onValueChange={setSlotId}>
+                <SelectTrigger className="bg-slate-900 border-slate-800 text-xs text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  {slots.length > 0 ? (
+                    slots.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.subject} ({s.teacherName} • {s.strictnessTag.replace('_', ' ')})
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none">General Academic (No Slot Link)</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Activity Type</label>
+              <Select value={taskType} onValueChange={(v: any) => setTaskType(v)}>
+                <SelectTrigger className="bg-slate-900 border-slate-800 text-xs text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  <SelectItem value="personal">Personal Goal / Task</SelectItem>
+                  <SelectItem value="meeting">Meeting / Call</SelectItem>
+                  <SelectItem value="appointment">Appointment / Checkup</SelectItem>
+                  <SelectItem value="chore">Chore / Errand</SelectItem>
+                  <SelectItem value="event">Event / Celebration</SelectItem>
+                  <SelectItem value="reminder">Quick Reminder</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {category === 'academic' && (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Academic Task Subtype</label>
+              <Select value={taskType} onValueChange={(v: any) => setTaskType(v)}>
+                <SelectTrigger className="bg-slate-900 border-slate-800 text-xs text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  <SelectItem value="problem_set">Problem Set / Numericals</SelectItem>
+                  <SelectItem value="lab_report">Lab Report / Diagrams</SelectItem>
+                  <SelectItem value="essay">Essay / Writing</SelectItem>
+                  <SelectItem value="reading">Reading / Chapter Prep</SelectItem>
+                  <SelectItem value="revision">Exam Revision Sheet</SelectItem>
+                  <SelectItem value="project">Coursework Project</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Due Date Switcher */}
+          <div className="space-y-2 pt-1 border-t border-slate-800/80">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-300">Deadline / Due Time</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDueOption('hours')}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    dueOption === 'hours'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Hours Left
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDueOption('custom')}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    dueOption === 'custom'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Specific Date & Time
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300">Estimated Effort (Hours)</label>
-              <Input
-                type="number"
-                step="0.5"
-                min="0.5"
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(Number(e.target.value))}
-                className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
-              />
-            </div>
+            {dueOption === 'hours' ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400">Hours Until Due</label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    value={hoursLeft}
+                    onChange={(e) => setHoursLeft(Number(e.target.value))}
+                    className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400">Estimated Effort (Hrs)</label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    value={estimatedHours}
+                    onChange={(e) => setEstimatedHours(Number(e.target.value))}
+                    className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400">Due Date</label>
+                  <Input
+                    type="date"
+                    value={customDate}
+                    onChange={(e) => setCustomDate(e.target.value)}
+                    className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400">Due Time</label>
+                  <Input
+                    type="time"
+                    value={customTime}
+                    onChange={(e) => setCustomTime(e.target.value)}
+                    className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-300">Task Type</label>
-            <Select value={taskType} onValueChange={(v: any) => setTaskType(v)}>
-              <SelectTrigger className="bg-slate-900 border-slate-800 text-xs text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
-                <SelectItem value="problem_set">Problem Set / Numericals</SelectItem>
-                <SelectItem value="lab_report">Lab Report / Diagrams</SelectItem>
-                <SelectItem value="essay">Essay / Writing</SelectItem>
-                <SelectItem value="reading">Reading / Chapter Prep</SelectItem>
-                <SelectItem value="revision">Exam Revision Sheet</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-300">Description / Details</label>
+            <label className="text-xs font-semibold text-slate-300">Description / Optional Notes</label>
             <Textarea
-              placeholder="Key sub-tasks or requirements..."
+              placeholder="Key notes, location, or sub-tasks..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="bg-slate-900 border-slate-800 text-xs text-white h-16"
@@ -140,7 +277,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
               Cancel
             </Button>
             <Button type="submit" className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs">
-              Add Task to War Room
+              Add Activity
             </Button>
           </div>
         </form>
