@@ -12,7 +12,6 @@ import { EvidenceLogView } from '@/components/evidence/EvidenceLogView';
 import { DebtLedgerView } from '@/components/debt/DebtLedgerView';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
-import { ProductTour } from '@/components/tutorial/ProductTour';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot';
 import { Task } from '@/types/ripple';
@@ -73,11 +72,8 @@ const RippleAppContent: React.FC = () => {
       {/* Interactive AI Assistant Chatbot */}
       <RippleAssistantChatbot />
 
-      {/* Guided Step-by-Step Tutorial Overlay */}
+      {/* Single Detailed Step-by-Step Tutorial Overlay */}
       <TutorialOverlay onTabChange={(tab) => setActiveTab(tab)} />
-
-      {/* Interactive Onboarding Spotlight Product Tour */}
-      <ProductTour onTabChange={(tab) => setActiveTab(tab)} />
 
       {/* Modals & Overlays */}
       <PredictionView

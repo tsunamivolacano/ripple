@@ -13,7 +13,8 @@ import {
   LogOut,
   User,
   ChevronDown,
-  HelpCircle
+  HelpCircle,
+  RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +34,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, currentUser, logout, loginDemoAccount, startTutorial, hasCompletedTutorial } = useRipple();
+  const { debt, currentUser, logout, loginDemoAccount, startTutorial, replayTutorial, hasCompletedTutorial } = useRipple();
 
   const activeDemoPersona = ALL_PERSONAS.find(p => p.id === currentUser?.demoPersonaId);
 
@@ -73,15 +74,15 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
           <div className="flex items-center gap-2.5">
             <IntensitySelector />
 
-            {/* Interactive Tutorial Button */}
+            {/* Replay Tutorial Button at Top */}
             <Button
               variant="outline"
               size="sm"
-              onClick={startTutorial}
+              onClick={replayTutorial}
               className="hidden lg:flex border-indigo-500/40 bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-200 hover:text-white text-xs gap-1.5 px-3 font-semibold transition-all"
             >
-              <HelpCircle className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-              <span>{hasCompletedTutorial ? 'Tutorial' : 'Start Tour'}</span>
+              <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{hasCompletedTutorial ? 'Replay Tutorial' : 'Start Guide'}</span>
             </Button>
 
             {/* User Profile Dropdown */}
@@ -114,11 +115,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
                 <DropdownMenuSeparator className="bg-slate-800" />
 
                 <DropdownMenuItem
-                  onClick={startTutorial}
+                  onClick={replayTutorial}
                   className="cursor-pointer text-indigo-300 hover:bg-indigo-950/40 rounded-lg px-2.5 py-1.5 flex items-center gap-2 text-xs font-semibold"
                 >
-                  <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
-                  Interactive Guided Tour
+                  <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+                  Replay Step-by-Step Guide
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator className="bg-slate-800" />
@@ -215,11 +216,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
           })}
 
           <button
-            onClick={startTutorial}
+            onClick={replayTutorial}
             className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-300 bg-indigo-950/40 border border-indigo-500/30"
           >
             <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Tutorial</span>
+            <span>Replay Guide</span>
           </button>
         </nav>
       </div>
