@@ -13,7 +13,6 @@ import {
   Play, 
   CheckCircle2, 
   Target,
-  Lightbulb,
   Plus,
   Bot,
   CalendarDays
@@ -298,13 +297,43 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ onTabChange })
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none">
-      {/* Subtle Semi-Transparent Background (Leaves underlying app fully visible) */}
-      <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] transition-all duration-300" />
+      {/* SVG Punch-Hole Backdrop: Dims the app while leaving the highlighted target 100% crystal sharp and clear */}
+      {targetRect ? (
+        <svg className="fixed inset-0 w-full h-full pointer-events-none z-40">
+          <defs>
+            <mask id="tutorial-spotlight-mask">
+              {/* White rect = dimmed background overlay area */}
+              <rect x="0" y="0" width="100%" height="100%" fill="white" />
+              {/* Black rect = 100% transparent cutout punch-hole over highlighted element */}
+              <rect
+                x={targetRect.left - 6}
+                y={targetRect.top - 6}
+                width={targetRect.width + 12}
+                height={targetRect.height + 12}
+                rx="12"
+                ry="12"
+                fill="black"
+              />
+            </mask>
+          </defs>
+          {/* Dimmed backdrop with mask */}
+          <rect
+            x="0"
+            y="0"
+            width="100%"
+            height="100%"
+            fill="rgba(2, 6, 23, 0.65)"
+            mask="url(#tutorial-spotlight-mask)"
+          />
+        </svg>
+      ) : (
+        <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-[1px] transition-all duration-300 z-40" />
+      )}
 
-      {/* Dynamic Highlight Ring Spotlight Box around target component */}
+      {/* Glowing Precision Frame around target component */}
       {targetRect && (
         <div
-          className="fixed pointer-events-none border-2 border-rose-500 rounded-2xl shadow-[0_0_35px_rgba(244,63,94,0.8)] animate-pulse transition-all duration-300 z-50"
+          className="fixed pointer-events-none border-2 border-rose-500 rounded-xl shadow-[0_0_25px_rgba(244,63,94,0.9),0_0_50px_rgba(244,63,94,0.4)] animate-pulse transition-all duration-300 z-50"
           style={{
             top: targetRect.top - 6,
             left: targetRect.left - 6,
@@ -314,9 +343,9 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ onTabChange })
         />
       )}
 
-      {/* Sleek Compact Docked Tutorial Bar (Bottom Center) - Does not block app content */}
+      {/* Compact Bottom Docked Tutorial Explanation Window */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[94vw] max-w-xl pointer-events-auto">
-        <div className="bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-2xl p-4 sm:p-5 text-white backdrop-blur-md space-y-3 border-t-2 border-t-rose-500">
+        <div className="bg-slate-900/95 border border-slate-700/90 rounded-2xl shadow-2xl p-4 sm:p-5 text-white backdrop-blur-md space-y-3 border-t-2 border-t-rose-500">
           
           {/* Header Row */}
           <div className="flex items-center justify-between gap-2">
@@ -348,18 +377,18 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ onTabChange })
             </div>
           </div>
 
-          {/* Concise Description */}
-          <p className="text-xs text-slate-200 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+          {/* Explanation Text */}
+          <p className="text-xs text-slate-200 leading-relaxed bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
             {currentStep.description}
           </p>
 
-          {/* Action Step Note */}
+          {/* Action Step Box */}
           <div className="flex items-center gap-2 text-[11px] text-emerald-300 bg-emerald-950/40 p-2 rounded-lg border border-emerald-500/30">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <span className="truncate">{currentStep.actionStep}</span>
           </div>
 
-          {/* Progress & Navigation Bar */}
+          {/* Navigation Controls */}
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
             <div className="flex-1 max-w-[140px] space-y-1">
               <Progress value={progressPercent} className="h-1.5 bg-slate-950 [&>div]:bg-rose-500" />
