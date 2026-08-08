@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TimetableSlot, StrictnessTag, StakesTag } from '@/types/ripple';
 import { useRipple } from '@/context/RippleContext';
-import { Calendar, UserCheck, GraduationCap, Percent, AlertCircle } from 'lucide-react';
+import { GraduationCap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,7 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
       setSubject(editingSlot.subject);
       setDayOfWeek(editingSlot.dayOfWeek);
       setStartTime(editingSlot.startTime);
-      setEndTime(editingSlot.endTime);
+      setEndTime(editingSlot.endTime || '10:15');
       setRoom(editingSlot.room);
       setTeacherName(editingSlot.teacherName);
       setStrictnessTag(editingSlot.strictnessTag);
@@ -44,6 +44,8 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
     } else {
       setSubject('');
       setTeacherName('');
+      setStartTime('09:00');
+      setEndTime('10:15');
       setWeight(25);
     }
   }, [editingSlot, isOpen]);
@@ -117,7 +119,7 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-300">Day</label>
               <Select value={dayOfWeek} onValueChange={(v: any) => setDayOfWeek(v)}>
@@ -138,6 +140,18 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
+                required
+                className="bg-slate-900 border-slate-800 text-xs text-white"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">End Time</label>
+              <Input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                required
                 className="bg-slate-900 border-slate-800 text-xs text-white"
               />
             </div>
