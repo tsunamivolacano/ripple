@@ -13,6 +13,8 @@ import { DebtLedgerView } from '@/components/debt/DebtLedgerView';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
 import { ProductTour } from '@/components/tutorial/ProductTour';
+import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
+import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot';
 import { Task } from '@/types/ripple';
 
 const RippleAppContent: React.FC = () => {
@@ -35,7 +37,7 @@ const RippleAppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white relative">
       {/* Top Navbar Header */}
       <Navbar
         activeTab={activeTab}
@@ -44,7 +46,7 @@ const RippleAppContent: React.FC = () => {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 pb-24">
         {activeTab === 'warroom' && (
           <WarRoom
             onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
@@ -68,7 +70,13 @@ const RippleAppContent: React.FC = () => {
         {activeTab === 'debt' && <DebtLedgerView />}
       </main>
 
-      {/* Interactive Onboarding Product Tour */}
+      {/* Interactive AI Assistant Chatbot */}
+      <RippleAssistantChatbot />
+
+      {/* Guided Step-by-Step Tutorial Overlay */}
+      <TutorialOverlay onTabChange={(tab) => setActiveTab(tab)} />
+
+      {/* Interactive Onboarding Spotlight Product Tour */}
       <ProductTour onTabChange={(tab) => setActiveTab(tab)} />
 
       {/* Modals & Overlays */}
