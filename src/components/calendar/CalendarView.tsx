@@ -36,7 +36,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onOpenFocus,
   onOpenNewTaskModal
 }) => {
-  const { tasks, slots, deleteTask } = useRipple();
+  const { tasks, slots, deleteTask, deleteSlot } = useRipple();
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -619,7 +619,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 text-xs gap-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  Delete
+                  Delete Task
                 </Button>
 
                 <Button
@@ -640,7 +640,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         )}
       </Dialog>
 
-      {/* TIMETABLE SLOT DETAILS MODAL */}
+      {/* TIMETABLE SLOT / CLASS DETAILS MODAL */}
       <Dialog open={!!selectedSlot} onOpenChange={() => setSelectedSlot(null)}>
         {selectedSlot && (
           <DialogContent className="bg-slate-950 border-indigo-500/40 text-white max-w-md rounded-2xl p-6">
@@ -672,6 +672,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   {selectedSlot.stakesTag.replace('_', ' ')}
                 </Badge>
               </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-800">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  deleteSlot(selectedSlot.id);
+                  setSelectedSlot(null);
+                }}
+                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 text-xs gap-1 font-semibold"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Class
+              </Button>
             </div>
           </DialogContent>
         )}
