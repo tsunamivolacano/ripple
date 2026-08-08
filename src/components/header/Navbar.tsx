@@ -34,16 +34,16 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, currentUser, logout, loginDemoAccount, startTutorial, replayTutorial, hasCompletedTutorial } = useRipple();
+  const { debt, currentUser, logout, loginDemoAccount, replayTutorial, hasCompletedTutorial } = useRipple();
 
   const activeDemoPersona = ALL_PERSONAS.find(p => p.id === currentUser?.demoPersonaId);
 
   const navItems = [
-    { id: 'warroom', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
-    { id: 'calendar', label: 'Live Calendar', icon: CalendarDays },
-    { id: 'timetable', label: 'Timetable & Context', icon: Calendar },
-    { id: 'evidence', label: 'Evidence Case File', icon: FileText },
-    { id: 'debt', label: 'Debt Ledger', icon: TrendingDown, badge: `${debt.totalHoursBehind}h` }
+    { id: 'warroom', tourKey: 'warroom-tab', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
+    { id: 'calendar', tourKey: 'calendar-tab', label: 'Live Calendar', icon: CalendarDays },
+    { id: 'timetable', tourKey: 'timetable-tab', label: 'Timetable & Context', icon: Calendar },
+    { id: 'evidence', tourKey: 'evidence-tab', label: 'Evidence Case File', icon: FileText },
+    { id: 'debt', tourKey: 'debt-tab', label: 'Debt Ledger', icon: TrendingDown, badge: `${debt.totalHoursBehind}h` }
   ];
 
   return (
@@ -197,6 +197,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
             return (
               <button
                 key={item.id}
+                data-tour={item.tourKey}
                 onClick={() => setActiveTab(item.id)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   isActive

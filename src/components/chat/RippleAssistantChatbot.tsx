@@ -21,7 +21,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Message {
   id: string;
@@ -176,7 +175,6 @@ export const RippleAssistantChatbot: React.FC = () => {
   const renderFormattedText = (text: string) => {
     const lines = text.split('\n');
     return lines.map((line, idx) => {
-      // Bold syntax **text**
       const parts = line.split(/(\*\*.*?\*\*)/g);
       return (
         <p key={idx} className={line === '' ? 'h-2' : 'mb-1 leading-relaxed'}>
@@ -196,7 +194,7 @@ export const RippleAssistantChatbot: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-50">
+    <div className="fixed bottom-5 right-5 z-50" data-tour="ai-chatbot">
       {/* Floating Toggle Button */}
       {!isOpen && (
         <Button
