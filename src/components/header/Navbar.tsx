@@ -14,7 +14,8 @@ import {
   User,
   ChevronDown,
   HelpCircle,
-  RotateCcw
+  RotateCcw,
+  Bell
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +35,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, currentUser, logout, loginDemoAccount, replayTutorial, hasCompletedTutorial } = useRipple();
+  const { debt, currentUser, logout, loginDemoAccount, replayTutorial, hasCompletedTutorial, setNotificationModalOpen } = useRipple();
 
   const activeDemoPersona = ALL_PERSONAS.find(p => p.id === currentUser?.demoPersonaId);
 
@@ -71,18 +72,29 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
           </div>
 
           {/* Header Action Controls */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <IntensitySelector />
+
+            {/* Notification Settings Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setNotificationModalOpen(true)}
+              className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white h-9 w-9 rounded-xl shrink-0"
+              title="Notification & Reminder Settings"
+            >
+              <Bell className="w-4 h-4 text-rose-400" />
+            </Button>
 
             {/* Replay Tutorial Button at Top */}
             <Button
               variant="outline"
               size="sm"
               onClick={replayTutorial}
-              className="hidden lg:flex border-indigo-500/40 bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-200 hover:text-white text-xs gap-1.5 px-3 font-semibold transition-all"
+              className="hidden lg:flex border-indigo-500/40 bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-200 hover:text-white text-xs gap-1.5 px-3 font-semibold transition-all h-9"
             >
               <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{hasCompletedTutorial ? 'Replay Tutorial' : 'Start Guide'}</span>
+              <span>{hasCompletedTutorial ? 'Replay Guide' : 'Start Guide'}</span>
             </Button>
 
             {/* User Profile Dropdown */}
@@ -91,7 +103,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-200 gap-1.5 px-2.5"
+                  className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-200 gap-1.5 px-2.5 h-9"
                 >
                   {currentUser?.isDemo ? (
                     <>
@@ -113,6 +125,14 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
                   Logged in as {currentUser?.isDemo ? 'Demo Account' : currentUser?.email}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-slate-800" />
+
+                <DropdownMenuItem
+                  onClick={() => setNotificationModalOpen(true)}
+                  className="cursor-pointer text-slate-200 hover:bg-slate-800 rounded-lg px-2.5 py-1.5 flex items-center gap-2 text-xs font-semibold"
+                >
+                  <Bell className="w-3.5 h-3.5 text-rose-400" />
+                  Background Reminder Settings
+                </DropdownMenuItem>
 
                 <DropdownMenuItem
                   onClick={replayTutorial}
@@ -228,3 +248,130 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
     </header>
   );
 };
+</dyad-file>
+
+<dyad-write path="src/pages/Index.tsx" description="Mounting NotificationSettingsModal in main page Index.tsx.">
+import React, { useState } from 'react';
+import { RippleProvider, useRipple } from '@/context/RippleContext';
+import { AuthPage } from '@/components/auth/AuthPage';
+import { Navbar } from '@/components/header/Navbar';
+import { WarRoom } from '@/components/doomsday/WarRoom';
+import { PredictionView } from '@/components/prediction/PredictionView';
+import { FocusModeModal } from '@/components/prediction/FocusModeModal';
+import { RenegotiateModal } from '@/components/prediction/RenegotiateModal';
+import { PositiveRecapModal } from '@/components/positive/PositiveRecapModal';
+import { TimetableGrid } from '@/components/timetable/TimetableGrid';
+import { EvidenceLogView } from '@/components/evidence/EvidenceLogView';
+import { DebtLedgerView } from '@/components/debt/DebtLedgerView';
+import { CalendarView } from '@/components/calendar/CalendarView';
+import { NewTaskModal } from '@/components/task/NewTaskModal';
+import { NotificationSettingsModal } from '@/components/settings/NotificationSettingsModal';
+import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
+import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot';
+import { Task } from '@/types/ripple';
+
+const RippleAppContent: React.FC = () => {
+  const {
+    currentUser,
+    activeTaskForPrediction,
+    activeFocusTask,
+    completedTaskForCelebration,
+    setActiveTaskForPrediction,
+    setActiveFocusTask,
+    setCompletedTaskForCelebration,
+    isNotificationModalOpen,
+    setNotificationModalOpen
+  } = useRipple();
+
+  const [activeTab, setActiveTab] = useState('warroom');
+  const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
+  const [renegotiateTask, setRenegotiateTask] = useState<Task | null>(null);
+
+  if (!currentUser) {
+    return <AuthPage />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white relative">
+      {/* Top Navbar Header */}
+      <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+      />
+
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 pb-24">
+        {activeTab === 'warroom' && (
+          <WarRoom
+            onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
+            onOpenFocus={(t) => setActiveFocusTask(t)}
+            onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'calendar' && (
+          <CalendarView
+            onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
+            onOpenFocus={(t) => setActiveFocusTask(t)}
+            onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'timetable' && <TimetableGrid />}
+
+        {activeTab === 'evidence' && <EvidenceLogView />}
+
+        {activeTab === 'debt' && <DebtLedgerView />}
+      </main>
+
+      {/* Interactive AI Assistant Chatbot */}
+      <RippleAssistantChatbot />
+
+      {/* Single Detailed Step-by-Step Tutorial Overlay */}
+      <TutorialOverlay onTabChange={(tab) => setActiveTab(tab)} />
+
+      {/* Notification Settings Modal */}
+      <NotificationSettingsModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setNotificationModalOpen(false)}
+      />
+
+      {/* Modals & Overlays */}
+      <PredictionView
+        task={activeTaskForPrediction}
+        onClose={() => setActiveTaskForPrediction(null)}
+        onOpenFocus={(t) => setActiveFocusTask(t)}
+        onOpenRenegotiate={(t) => setRenegotiateTask(t)}
+      />
+
+      <FocusModeModal
+        task={activeFocusTask}
+        onClose={() => setActiveFocusTask(null)}
+      />
+
+      <RenegotiateModal
+        task={renegotiateTask}
+        onClose={() => setRenegotiateTask(null)}
+      />
+
+      <PositiveRecapModal
+        task={completedTaskForCelebration}
+        onClose={() => setCompletedTaskForCelebration(null)}
+      />
+
+      <NewTaskModal
+        isOpen={isNewTaskModalOpen}
+        onClose={() => setIsNewTaskModalOpen(false)}
+      />
+    </div>
+  );
+};
+
+export default function Index() {
+  return (
+    <RippleProvider>
+      <RippleAppContent />
+    </RippleProvider>
+  );
+}

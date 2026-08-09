@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
-import { TaskType, TaskCategory } from '@/types/ripple';
-import { Plus, Clock, GraduationCap, User, Calendar, Briefcase, CheckSquare, Bell } from 'lucide-react';
+import { TaskType, TaskCategory, ReminderTiming } from '@/types/ripple';
+import { REMINDER_LABEL_MAP } from '@/utils/notificationService';
+import { Plus, GraduationCap, User, Bell } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +14,10 @@ interface NewTaskModalProps {
   onClose: () => void;
 }
 
+const REMINDER_OPTIONS: ReminderTiming[] = ['exact', '5m', '15m', '30m', '1h', '1d'];
+
 export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) => {
-  const { addTask, slots } = useRipple();
+  const { addTask, slots, notificationSettings } = useRipple();
 
   const [category, setCategory] = useState<TaskCategory>('academic');
   const [title, setTitle] = useState('');
@@ -33,12 +36,25 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
   const [estimatedHours, setEstimatedHours] = useState(1.0);
   const [taskType, setTaskType] = useState<TaskType>('problem_set');
 
+  // Multi-reminder selection
+  const [selectedReminders, setSelectedReminders] = useState<ReminderTiming[]>(
+    notificationSettings.defaultTaskReminders || ['15m', 'exact']
+  );
+
   const handleCategoryChange = (cat: TaskCategory) => {
     setCategory(cat);
     if (cat === 'personal') {
       setTaskType('personal');
     } else {
       setTaskType('problem_set');
+    }
+  };
+
+  const toggleReminder = (opt: ReminderTiming) => {
+    if (selectedReminders.includes(opt)) {
+      setSelectedReminders(selectedReminders.filter((r) => r !== opt));
+    } else {
+      setSelectedReminders([...selectedReminders, opt]);
     }
   };
 
@@ -61,7 +77,8 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
       estimatedHours,
       completionPercentage: 0,
       taskType,
-      category
+      category,
+      reminders: selectedReminders
     });
 
     // Reset Form
@@ -262,6 +279,33 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
             )}
           </div>
 
+          {/* Reminder Timing Selector */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Bell className="w-3.5 h-3.5 text-rose-400" />
+              Background Reminder Timing (Multi-Select)
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {REMINDER_OPTIONS.map((opt) => {
+                const isSelected = selectedReminders.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => toggleReminder(opt)}
+                    className={`p-1.5 rounded-lg border text-[10px] font-medium transition-all text-left ${
+                      isSelected
+                        ? 'bg-rose-500/20 border-rose-500 text-rose-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {REMINDER_LABEL_MAP[opt]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-300">Description / Optional Notes</label>
             <Textarea
@@ -278,6 +322,288 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
             </Button>
             <Button type="submit" className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs">
               Add Activity
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+</dyad-file>
+
+<dyad-write path="src/components/timetable/TeacherTagEditor.tsx" description="Updating TeacherTagEditor to allow setting background reminder timings for class sessions.">
+import React, { useState, useEffect } from 'react';
+import { TimetableSlot, StrictnessTag, StakesTag, ReminderTiming } from '@/types/ripple';
+import { useRipple } from '@/context/RippleContext';
+import { REMINDER_LABEL_MAP } from '@/utils/notificationService';
+import { GraduationCap, Bell } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+interface TeacherTagEditorProps {
+  isOpen: boolean;
+  editingSlot: TimetableSlot | null;
+  onClose: () => void;
+}
+
+const REMINDER_OPTIONS: ReminderTiming[] = ['exact', '5m', '15m', '30m', '1h', '1d'];
+
+export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
+  isOpen,
+  editingSlot,
+  onClose
+}) => {
+  const { addSlot, updateSlot, notificationSettings } = useRipple();
+
+  const [subject, setSubject] = useState('');
+  const [dayOfWeek, setDayOfWeek] = useState<TimetableSlot['dayOfWeek']>('Monday');
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('10:15');
+  const [room, setRoom] = useState('Room 101');
+  const [teacherName, setTeacherName] = useState('');
+  const [strictnessTag, setStrictnessTag] = useState<StrictnessTag>('NOTEBOOK_CHECK');
+  const [stakesTag, setStakesTag] = useState<StakesTag>('GRADED_QUIZ');
+  const [weight, setWeight] = useState<number>(25);
+
+  const [selectedReminders, setSelectedReminders] = useState<ReminderTiming[]>(
+    notificationSettings.defaultClassReminders || ['15m']
+  );
+
+  useEffect(() => {
+    if (editingSlot) {
+      setSubject(editingSlot.subject);
+      setDayOfWeek(editingSlot.dayOfWeek);
+      setStartTime(editingSlot.startTime);
+      setEndTime(editingSlot.endTime || '10:15');
+      setRoom(editingSlot.room);
+      setTeacherName(editingSlot.teacherName);
+      setStrictnessTag(editingSlot.strictnessTag);
+      setStakesTag(editingSlot.stakesTag);
+      setWeight(editingSlot.weight);
+      setSelectedReminders(editingSlot.reminders || ['15m']);
+    } else {
+      setSubject('');
+      setTeacherName('');
+      setStartTime('09:00');
+      setEndTime('10:15');
+      setWeight(25);
+      setSelectedReminders(notificationSettings.defaultClassReminders || ['15m']);
+    }
+  }, [editingSlot, isOpen]);
+
+  const toggleReminder = (opt: ReminderTiming) => {
+    if (selectedReminders.includes(opt)) {
+      setSelectedReminders(selectedReminders.filter((r) => r !== opt));
+    } else {
+      setSelectedReminders([...selectedReminders, opt]);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subject || !teacherName) return;
+
+    if (editingSlot) {
+      updateSlot({
+        ...editingSlot,
+        subject,
+        dayOfWeek,
+        startTime,
+        endTime,
+        room,
+        teacherName,
+        strictnessTag,
+        stakesTag,
+        weight,
+        reminders: selectedReminders
+      });
+    } else {
+      addSlot({
+        subject,
+        dayOfWeek,
+        startTime,
+        endTime,
+        room,
+        teacherName,
+        strictnessTag,
+        stakesTag,
+        weight,
+        reminders: selectedReminders
+      });
+    }
+
+    onClose();
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="bg-slate-950 border-slate-800 text-white max-w-lg rounded-2xl p-6">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold flex items-center gap-2">
+            <GraduationCap className="w-5 h-5 text-amber-400" />
+            {editingSlot ? 'Edit Class & Teacher Context' : 'Add Class & Human Context'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4 my-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Subject Name</label>
+              <Input
+                placeholder="e.g. Physics"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                required
+                className="bg-slate-900 border-slate-800 text-xs text-white"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Teacher / Instructor</label>
+              <Input
+                placeholder="e.g. Dr. Sharma"
+                value={teacherName}
+                onChange={(e) => setTeacherName(e.target.value)}
+                required
+                className="bg-slate-900 border-slate-800 text-xs text-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Day</label>
+              <Select value={dayOfWeek} onValueChange={(v: any) => setDayOfWeek(v)}>
+                <SelectTrigger className="bg-slate-900 border-slate-800 text-xs text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Start Time</label>
+              <Input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                required
+                className="bg-slate-900 border-slate-800 text-xs text-white"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">End Time</label>
+              <Input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                required
+                className="bg-slate-900 border-slate-800 text-xs text-white"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Room / Hall</label>
+              <Input
+                placeholder="Lab 204"
+                value={room}
+                onChange={(e) => setRoom(e.target.value)}
+                className="bg-slate-900 border-slate-800 text-xs text-white"
+              />
+            </div>
+          </div>
+
+          {/* Teacher Strictness & Stakes */}
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-rose-300">Teacher Strictness Tag</label>
+              <Select value={strictnessTag} onValueChange={(v: any) => setStrictnessTag(v)}>
+                <SelectTrigger className="bg-slate-900 border-rose-500/30 text-xs text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  <SelectItem value="COLD_CALL">Spot Cold-Calls</SelectItem>
+                  <SelectItem value="NOTEBOOK_CHECK">Checks Notebook Copies</SelectItem>
+                  <SelectItem value="ATTENDANCE_STRICT">Strict Locks Doors</SelectItem>
+                  <SelectItem value="PUBLIC_SCOLD">Public Scolder</SelectItem>
+                  <SelectItem value="QUIET_TALK">Quiet Disappointment Talk</SelectItem>
+                  <SelectItem value="LENIENT">Lenient (-10% late fee)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-indigo-300">Submission Stake</label>
+              <Select value={stakesTag} onValueChange={(v: any) => setStakesTag(v)}>
+                <SelectTrigger className="bg-slate-900 border-indigo-500/30 text-xs text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  <SelectItem value="GRADED_QUIZ">Graded Quiz</SelectItem>
+                  <SelectItem value="NOTEBOOK_COPY">Notebook / Diagram Copy</SelectItem>
+                  <SelectItem value="LAB_PRACTICAL">Lab Practical Report</SelectItem>
+                  <SelectItem value="PRESENTATION">Class Presentation</SelectItem>
+                  <SelectItem value="HOMEWORK">Regular Homework</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Background Class Reminders Selection */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-800">
+            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Bell className="w-3.5 h-3.5 text-indigo-400" />
+              Class Session Reminders (Multi-Select)
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {REMINDER_OPTIONS.map((opt) => {
+                const isSelected = selectedReminders.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => toggleReminder(opt)}
+                    className={`p-1.5 rounded-lg border text-[10px] font-medium transition-all text-left ${
+                      isSelected
+                        ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {REMINDER_LABEL_MAP[opt]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs font-semibold text-slate-300">
+              <span>Category Grade Weight:</span>
+              <span className="font-mono text-amber-400">{weight}%</span>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={weight}
+              onChange={(e) => setWeight(Number(e.target.value))}
+              className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3">
+            <Button type="button" variant="ghost" onClick={onClose} className="text-slate-400 hover:text-white text-xs">
+              Cancel
+            </Button>
+            <Button type="submit" className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs">
+              Save Class Context
             </Button>
           </div>
         </form>

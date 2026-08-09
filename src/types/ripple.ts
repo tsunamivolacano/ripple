@@ -34,6 +34,8 @@ export type TaskType =
 
 export type TaskCategory = 'academic' | 'personal';
 
+export type ReminderTiming = 'exact' | '5m' | '15m' | '30m' | '1h' | '1d' | 'overdue';
+
 export interface TimetableSlot {
   id: string;
   subject: string;
@@ -45,6 +47,7 @@ export interface TimetableSlot {
   strictnessTag: StrictnessTag;
   stakesTag: StakesTag;
   weight: number; // 1 to 100%
+  reminders?: ReminderTiming[];
   notes?: string;
 }
 
@@ -53,12 +56,13 @@ export interface Task {
   title: string;
   description?: string;
   slotId?: string;
-  dueDate: string; // ISO String
+  dueDate: string; // ISO String in UTC
   estimatedHours: number;
   completionPercentage: number;
   taskType: TaskType;
   category?: TaskCategory;
   status: TaskStatus;
+  reminders?: ReminderTiming[];
   createdAt: string;
   completedAt?: string;
   renegotiatedCount?: number;
@@ -124,9 +128,29 @@ export interface ProcrastinationDebt {
   weeklyDebtTrend: { day: string; debtHours: number }[];
 }
 
+export interface NotificationSettings {
+  taskRemindersEnabled: boolean;
+  classRemindersEnabled: boolean;
+  defaultTaskReminders: ReminderTiming[];
+  defaultClassReminders: ReminderTiming[];
+}
+
+export interface ScheduledNotification {
+  id: string;
+  userId: string;
+  itemId: string;
+  itemType: 'task' | 'class' | 'overdue';
+  title: string;
+  body: string;
+  triggerTime: string; // ISO UTC
+  reminderOffset: ReminderTiming;
+  status: 'pending' | 'sent' | 'cancelled';
+  createdAt: string;
+}
+
 export interface UserSettings {
   intensityMode: IntensityMode;
   isMinorProfile: boolean;
   weeklyDigestOnly: boolean;
-  personalVelocityMultiplier: number; // e.g. 1.2x (takes 20% longer than estimated)
+  personalVelocityMultiplier: number; // e.g. 1.2x
 }

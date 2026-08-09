@@ -9,12 +9,20 @@ import {
   StakesTag,
   TaskType,
   TaskCategory,
-  TaskStatus
+  TaskStatus,
+  NotificationSettings
 } from '@/types/ripple';
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { showSuccess, showError } from '@/utils/toast';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { supabase } from '@/integrations/supabase/client';
+import { 
+  registerServiceWorker, 
+  scheduleTaskNotifications, 
+  scheduleClassNotifications, 
+  cancelItemNotifications, 
+  getNextSlotDateISO 
+} from '@/utils/notificationService';
 
 export interface UserAccount {
   id: string;
@@ -36,11 +44,17 @@ interface RippleContextType {
   evidenceEntries: EvidenceEntry[];
   debt: ProcrastinationDebt;
   settings: UserSettings;
+  notificationSettings: NotificationSettings;
   currentPersonaId: string;
   activeTaskForPrediction: Task | null;
   activeFocusTask: Task | null;
   completedTaskForCelebration: Task | null;
   isLoadingData: boolean;
+
+  // Notification Modal
+  isNotificationModalOpen: boolean;
+  setNotificationModalOpen: (open: boolean) => void;
+  updateNotificationSettings: (newSettings: Partial<NotificationSettings>) => Promise<void>;
 
   // Tutorial State
   isTutorialOpen: boolean;
@@ -110,7 +124,13 @@ const emptySettings: UserSettings = {
   personalVelocityMultiplier: 1.0
 };
 
-// Storage Helpers
+const defaultNotificationSettings: NotificationSettings = {
+  taskRemindersEnabled: true,
+  classRemindersEnabled: true,
+  defaultTaskReminders: ['15m', 'exact'],
+  defaultClassReminders: ['15m']
+};
+
 function safeGetStorage<T>(key: string, fallback: T): T {
   try {
     const saved = localStorage.getItem(key) || sessionStorage.getItem(key);
@@ -128,7 +148,6 @@ function safeSetStorage<T>(key: string, value: T): void {
   }
 }
 
-// Generate deterministic local ID for email
 function getLocalUserId(email: string): string {
   const clean = email.toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
   return `usr_${clean}`;
@@ -149,6 +168,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>([]);
   const [debt, setDebt] = useState<ProcrastinationDebt>(emptyDebt);
   const [settings, setSettings] = useState<UserSettings>(emptySettings);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(defaultNotificationSettings);
+
+  const [isNotificationModalOpen, setNotificationModalOpen] = useState<boolean>(false);
 
   const [activeTaskForPrediction, setActiveTaskForPrediction] = useState<Task | null>(null);
   const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
@@ -159,12 +181,16 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [currentTutorialStep, setCurrentTutorialStep] = useState<number>(0);
   const [hasCompletedTutorial, setHasCompletedTutorial] = useState<boolean>(false);
 
+  // Register SW on load
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
   // Load account data from local storage or Supabase
   const loadAccountData = async (user: UserAccount) => {
     setIsLoadingData(true);
     const uKey = user.id;
 
-    // 1. If Demo Persona Account: Always load fresh constant persona data
     if (user.isDemo && user.demoPersonaId) {
       const persona = PERSONAS_MAP[user.demoPersonaId] || defaultPersona;
       setSlots(persona.slots);
@@ -172,18 +198,19 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setEvidenceEntries(persona.evidenceEntries);
       setDebt(persona.debt);
       setSettings(persona.settings);
+      setNotificationSettings(defaultNotificationSettings);
       setCurrentPersonaId(persona.id);
       setHasCompletedTutorial(safeGetStorage(`ripple_tutorial_completed_${uKey}`, false));
       setIsLoadingData(false);
       return;
     }
 
-    // 2. Normal Account: First check local storage for user-specific saved data
     const localSlots = safeGetStorage<TimetableSlot[] | null>(`ripple_slots_${uKey}`, null);
     const localTasks = safeGetStorage<Task[] | null>(`ripple_tasks_${uKey}`, null);
     const localEvidence = safeGetStorage<EvidenceEntry[] | null>(`ripple_evidence_${uKey}`, null);
     const localDebt = safeGetStorage<ProcrastinationDebt | null>(`ripple_debt_${uKey}`, null);
     const localSettings = safeGetStorage<UserSettings | null>(`ripple_settings_${uKey}`, null);
+    const localNotifSettings = safeGetStorage<NotificationSettings | null>(`ripple_notif_settings_${uKey}`, null);
 
     if (localSlots !== null) setSlots(localSlots);
     else setSlots([]);
@@ -200,17 +227,20 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (localSettings !== null) setSettings(localSettings);
     else setSettings(emptySettings);
 
+    if (localNotifSettings !== null) setNotificationSettings(localNotifSettings);
+    else setNotificationSettings(defaultNotificationSettings);
+
     setHasCompletedTutorial(safeGetStorage(`ripple_tutorial_completed_${uKey}`, false));
 
-    // 3. If real Supabase account (not local session), sync with Supabase tables
     if (!user.isLocalSession && !user.isDemo) {
       try {
-        const [slotsRes, tasksRes, evidenceRes, settingsRes, debtRes] = await Promise.all([
+        const [slotsRes, tasksRes, evidenceRes, settingsRes, debtRes, notifRes] = await Promise.all([
           supabase.from('timetable_slots').select('*').eq('user_id', user.id),
           supabase.from('tasks').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
           supabase.from('evidence_entries').select('*').eq('user_id', user.id).order('date_logged', { ascending: false }),
           supabase.from('user_settings').select('*').eq('user_id', user.id).single(),
-          supabase.from('user_debt').select('*').eq('user_id', user.id).single()
+          supabase.from('user_debt').select('*').eq('user_id', user.id).single(),
+          supabase.from('notification_settings').select('*').eq('user_id', user.id).single()
         ]);
 
         if (!slotsRes.error && slotsRes.data) {
@@ -252,55 +282,24 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           safeSetStorage(`ripple_tasks_${uKey}`, dbTasks);
         }
 
-        if (!evidenceRes.error && evidenceRes.data) {
-          const dbEvidence: EvidenceEntry[] = evidenceRes.data.map((e) => ({
-            id: e.id,
-            taskId: e.task_id || '',
-            taskTitle: e.task_title,
-            subject: e.subject,
-            teacherName: e.teacher_name,
-            predictedScenario: e.predicted_scenario,
-            actualOutcome: e.actual_outcome,
-            wasOnTime: e.was_on_time,
-            accuracyRating: e.accuracy_rating,
-            dateLogged: e.date_logged,
-            userNotes: e.user_notes || undefined
-          }));
-          setEvidenceEntries(dbEvidence);
-          safeSetStorage(`ripple_evidence_${uKey}`, dbEvidence);
-        }
-
-        if (!settingsRes.error && settingsRes.data) {
-          const dbSettings: UserSettings = {
-            intensityMode: settingsRes.data.intensity_mode as UserSettings['intensityMode'],
-            isMinorProfile: settingsRes.data.is_minor_profile,
-            weeklyDigestOnly: settingsRes.data.weekly_digest_only,
-            personalVelocityMultiplier: Number(settingsRes.data.personal_velocity_multiplier || 1.0)
+        if (!notifRes.error && notifRes.data) {
+          const dbNotif: NotificationSettings = {
+            taskRemindersEnabled: notifRes.data.task_reminders_enabled,
+            classRemindersEnabled: notifRes.data.class_reminders_enabled,
+            defaultTaskReminders: Array.isArray(notifRes.data.default_task_reminders) ? notifRes.data.default_task_reminders : ['15m', 'exact'],
+            defaultClassReminders: Array.isArray(notifRes.data.default_class_reminders) ? notifRes.data.default_class_reminders : ['15m']
           };
-          setSettings(dbSettings);
-          safeSetStorage(`ripple_settings_${uKey}`, dbSettings);
-        }
-
-        if (!debtRes.error && debtRes.data) {
-          const dbDebt: ProcrastinationDebt = {
-            totalHoursBehind: Number(debtRes.data.total_hours_behind || 0),
-            missedDeadlinesCount: Number(debtRes.data.missed_deadlines_count || 0),
-            streakDays: Number(debtRes.data.streak_days || 0),
-            compoundingScore: Number(debtRes.data.compounding_score || 0),
-            weeklyDebtTrend: Array.isArray(debtRes.data.weekly_debt_trend) ? debtRes.data.weekly_debt_trend : []
-          };
-          setDebt(dbDebt);
-          safeSetStorage(`ripple_debt_${uKey}`, dbDebt);
+          setNotificationSettings(dbNotif);
+          safeSetStorage(`ripple_notif_settings_${uKey}`, dbNotif);
         }
       } catch (err) {
-        console.warn('Network sync exception, falling back to account local storage:', err);
+        console.warn('Network sync exception:', err);
       }
     }
 
     setIsLoadingData(false);
   };
 
-  // Monitor Supabase Auth Session State
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user && !currentUser?.isLocalSession) {
@@ -329,7 +328,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch account data whenever current user changes
   useEffect(() => {
     if (currentUser) {
       safeSetStorage('ripple_active_user', currentUser);
@@ -337,7 +335,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [currentUser?.id]);
 
-  // Save changes to current account's local storage whenever state updates
   useEffect(() => {
     if (currentUser && !currentUser.isDemo) {
       const uKey = currentUser.id;
@@ -346,9 +343,10 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_evidence_${uKey}`, evidenceEntries);
       safeSetStorage(`ripple_debt_${uKey}`, debt);
       safeSetStorage(`ripple_settings_${uKey}`, settings);
+      safeSetStorage(`ripple_notif_settings_${uKey}`, notificationSettings);
       safeSetStorage(`ripple_tutorial_completed_${uKey}`, hasCompletedTutorial);
     }
-  }, [slots, tasks, evidenceEntries, debt, settings, hasCompletedTutorial]);
+  }, [slots, tasks, evidenceEntries, debt, settings, notificationSettings, hasCompletedTutorial]);
 
   // Dynamic status updater ticker
   useEffect(() => {
@@ -364,7 +362,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(timer);
   }, [settings.personalVelocityMultiplier]);
 
-  // Tutorial Actions
   const startTutorial = () => {
     setCurrentTutorialStep(0);
     setIsTutorialOpen(true);
@@ -384,21 +381,14 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsTutorialOpen(false);
     if (currentUser) {
       safeSetStorage(`ripple_tutorial_completed_${currentUser.id}`, true);
-      if (!currentUser.isDemo && !currentUser.isLocalSession) {
-        supabase
-          .from('user_settings')
-          .upsert({ user_id: currentUser.id, has_completed_tutorial: true })
-          .then();
-      }
     }
-    showSuccess('Tutorial completed! You are ready to master RIPPLE.');
+    showSuccess('Tutorial completed!');
   };
 
   const setTutorialStep = (step: number) => {
     setCurrentTutorialStep(step);
   };
 
-  // Login Handler
   const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
@@ -422,12 +412,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         showSuccess(`Signed in as ${cleanEmail}`);
         return { success: true };
       }
-
-      if (error) {
-        console.warn('Supabase Auth response warning. Utilizing local user account session:', error.message);
-      }
     } catch (e) {
-      console.warn('Auth exception, creating local user session:', e);
+      console.warn('Auth exception, fallback to local session:', e);
     }
 
     const localId = getLocalUserId(cleanEmail);
@@ -466,12 +452,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         showSuccess(`Account created & signed in!`);
         return { success: true };
       }
-
-      if (error) {
-        console.warn('Supabase Signup warning. Utilizing local user account session:', error.message);
-      }
     } catch (e) {
-      console.warn('Signup exception, creating local user session:', e);
+      console.warn('Signup exception, fallback to local session:', e);
     }
 
     const localId = getLocalUserId(cleanEmail);
@@ -500,7 +482,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showSuccess(`Viewing Demo Persona: ${persona.name}`);
   };
 
-  // Sign out only clears active session, keeping account data intact in storage and database
   const logout = async () => {
     try {
       if (currentUser && !currentUser.isDemo && !currentUser.isLocalSession) {
@@ -536,7 +517,12 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!currentUser.isDemo) {
       safeSetStorage(`ripple_slots_${currentUser.id}`, updatedSlots);
     }
-    showSuccess(`Timetable slot for ${newSlot.subject} created.`);
+
+    // Schedule Class Notifications
+    const nextClassISO = getNextSlotDateISO(newSlot.dayOfWeek, newSlot.startTime);
+    await scheduleClassNotifications(currentUser.id, newSlot, nextClassISO, notificationSettings);
+
+    showSuccess(`Timetable slot for ${newSlot.subject} created with reminders.`);
 
     if (!currentUser.isDemo && !currentUser.isLocalSession) {
       await supabase.from('timetable_slots').insert({
@@ -564,6 +550,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_slots_${currentUser.id}`, updatedSlots);
     }
 
+    const nextClassISO = getNextSlotDateISO(updatedSlot.dayOfWeek, updatedSlot.startTime);
+    await scheduleClassNotifications(currentUser.id, updatedSlot, nextClassISO, notificationSettings);
+
     if (!currentUser.isDemo && !currentUser.isLocalSession) {
       await supabase
         .from('timetable_slots')
@@ -583,7 +572,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .eq('user_id', currentUser.id);
     }
 
-    showSuccess(`Updated ${updatedSlot.subject} slot.`);
+    showSuccess(`Updated ${updatedSlot.subject} class schedule.`);
   };
 
   const deleteSlot = async (id: string) => {
@@ -594,6 +583,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!currentUser.isDemo) {
       safeSetStorage(`ripple_slots_${currentUser.id}`, updatedSlots);
     }
+
+    await cancelItemNotifications(currentUser.id, id);
 
     if (!currentUser.isDemo && !currentUser.isLocalSession) {
       await supabase
@@ -622,12 +613,17 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       createdAt: new Date().toISOString(),
       status: computedStatus
     };
+
     const updatedTasks = [newTask, ...tasks];
     setTasks(updatedTasks);
     if (!currentUser.isDemo) {
       safeSetStorage(`ripple_tasks_${currentUser.id}`, updatedTasks);
     }
-    showSuccess(`Task "${newTask.title}" added to War Room.`);
+
+    // Schedule Background Notifications
+    await scheduleTaskNotifications(currentUser.id, newTask, notificationSettings);
+
+    showSuccess(`Task "${newTask.title}" added with background reminders.`);
 
     if (!currentUser.isDemo && !currentUser.isLocalSession) {
       await supabase.from('tasks').insert({
@@ -668,6 +664,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         if (isComplete) {
           setCompletedTaskForCelebration(updatedTask);
+          // Cancel future reminders for completed tasks!
+          cancelItemNotifications(currentUser.id, taskId);
+
           setDebt((d) => {
             const newDebt = {
               ...d,
@@ -736,6 +735,10 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_tasks_${currentUser.id}`, updatedTasks);
     }
 
+    if (updatedTaskObj) {
+      await scheduleTaskNotifications(currentUser.id, updatedTaskObj, notificationSettings);
+    }
+
     const updatedDebt = {
       ...debt,
       totalHoursBehind: debt.totalHoursBehind + 0.5,
@@ -760,7 +763,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .eq('user_id', currentUser.id);
     }
 
-    showSuccess('Task schedule renegotiated.');
+    showSuccess('Task schedule renegotiated & notifications updated.');
   };
 
   const deleteTask = async (id: string) => {
@@ -771,6 +774,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!currentUser.isDemo) {
       safeSetStorage(`ripple_tasks_${currentUser.id}`, updatedTasks);
     }
+
+    await cancelItemNotifications(currentUser.id, id);
 
     if (!currentUser.isDemo && !currentUser.isLocalSession) {
       await supabase
@@ -836,6 +841,28 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showSuccess('Settings updated.');
   };
 
+  const updateNotificationSettings = async (newSettings: Partial<NotificationSettings>) => {
+    if (!currentUser) return;
+
+    const merged = { ...notificationSettings, ...newSettings };
+    setNotificationSettings(merged);
+    if (!currentUser.isDemo) {
+      safeSetStorage(`ripple_notif_settings_${currentUser.id}`, merged);
+    }
+
+    if (!currentUser.isDemo && !currentUser.isLocalSession) {
+      await supabase.from('notification_settings').upsert({
+        user_id: currentUser.id,
+        task_reminders_enabled: merged.taskRemindersEnabled,
+        class_reminders_enabled: merged.classRemindersEnabled,
+        default_task_reminders: merged.defaultTaskReminders,
+        default_class_reminders: merged.defaultClassReminders
+      });
+    }
+
+    showSuccess('Notification preferences saved.');
+  };
+
   const loadPersonaData = (personaId: string) => {
     const bundle = PERSONAS_MAP[personaId] || defaultPersona;
     setCurrentPersonaId(bundle.id);
@@ -870,11 +897,15 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         evidenceEntries,
         debt,
         settings,
+        notificationSettings,
         currentPersonaId,
         activeTaskForPrediction,
         activeFocusTask,
         completedTaskForCelebration,
         isLoadingData,
+        isNotificationModalOpen,
+        setNotificationModalOpen,
+        updateNotificationSettings,
         isTutorialOpen,
         currentTutorialStep,
         hasCompletedTutorial,
