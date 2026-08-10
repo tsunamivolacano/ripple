@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { TaskType, TaskCategory, ReminderTiming } from '@/types/ripple';
 import { REMINDER_LABEL_MAP } from '@/utils/notificationService';
-import { Plus, GraduationCap, User, Bell } from 'lucide-react';
+import { Plus, GraduationCap, User, Bell, Clock, ShieldCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 
 interface NewTaskModalProps {
   isOpen: boolean;
@@ -23,6 +24,9 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [slotId, setSlotId] = useState(slots[0]?.id || '');
+
+  // Flexible Deadline Toggle
+  const [hasDeadline, setHasDeadline] = useState<boolean>(true);
   
   // Due date & time setup
   const [dueOption, setDueOption] = useState<'hours' | 'custom'>('hours');
@@ -45,8 +49,10 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
     setCategory(cat);
     if (cat === 'personal') {
       setTaskType('personal');
+      setHasDeadline(false); // Default flexible for general tasks
     } else {
       setTaskType('problem_set');
+      setHasDeadline(true);
     }
   };
 
@@ -62,23 +68,26 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
     e.preventDefault();
     if (!title.trim()) return;
 
-    let dueDateISO = new Date().toISOString();
-    if (dueOption === 'hours') {
-      dueDateISO = new Date(Date.now() + hoursLeft * 3600 * 1000).toISOString();
-    } else {
-      dueDateISO = new Date(`${customDate}T${customTime}:00`).toISOString();
+    let dueDateISO: string | undefined = undefined;
+    if (hasDeadline) {
+      if (dueOption === 'hours') {
+        dueDateISO = new Date(Date.now() + hoursLeft * 3600 * 1000).toISOString();
+      } else {
+        dueDateISO = new Date(`${customDate}T${customTime}:00`).toISOString();
+      }
     }
 
     addTask({
       title,
       description,
       slotId: category === 'academic' ? slotId : undefined,
+      hasDeadline,
       dueDate: dueDateISO,
       estimatedHours,
       completionPercentage: 0,
       taskType,
       category,
-      reminders: selectedReminders
+      reminders: hasDeadline ? selectedReminders : []
     });
 
     // Reset Form
@@ -89,11 +98,11 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-950 border-slate-800 text-white max-w-md rounded-2xl p-6">
+      <DialogContent className="bg-slate-950 border-slate-800 text-white max-w-md rounded-2xl p-6 max-h-[90vh] overflow-y-auto no-scrollbar">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold flex items-center gap-2">
             <Plus className="w-5 h-5 text-rose-500" />
-            Add Activity to War Room & Calendar
+            Add Activity or Task
           </DialogTitle>
         </DialogHeader>
 
@@ -122,7 +131,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
             }`}
           >
             <User className="w-4 h-4" />
-            Personal / General
+            General / Self-Study
           </button>
         </div>
 
@@ -133,7 +142,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
               placeholder={
                 category === 'academic'
                   ? 'e.g. Physics Numerical Homework'
-                  : 'e.g. Doctor Appointment / Team Sync'
+                  : 'e.g. Daily Math Practice / Reading Chapter 3'
               }
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -170,146 +179,159 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  <SelectItem value="self_study">Self-Study / Revision</SelectItem>
+                  <SelectItem value="reading">Reading / Practice</SelectItem>
                   <SelectItem value="personal">Personal Goal / Task</SelectItem>
                   <SelectItem value="meeting">Meeting / Call</SelectItem>
                   <SelectItem value="appointment">Appointment / Checkup</SelectItem>
                   <SelectItem value="chore">Chore / Errand</SelectItem>
                   <SelectItem value="event">Event / Celebration</SelectItem>
-                  <SelectItem value="reminder">Quick Reminder</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           )}
 
-          {category === 'academic' && (
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300">Academic Task Subtype</label>
-              <Select value={taskType} onValueChange={(v: any) => setTaskType(v)}>
-                <SelectTrigger className="bg-slate-900 border-slate-800 text-xs text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
-                  <SelectItem value="problem_set">Problem Set / Numericals</SelectItem>
-                  <SelectItem value="lab_report">Lab Report / Diagrams</SelectItem>
-                  <SelectItem value="essay">Essay / Writing</SelectItem>
-                  <SelectItem value="reading">Reading / Chapter Prep</SelectItem>
-                  <SelectItem value="revision">Exam Revision Sheet</SelectItem>
-                  <SelectItem value="project">Coursework Project</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Flexible Deadline Toggle */}
+          <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+            <div>
+              <span className="font-bold text-slate-200 block">Set Explicit Submission Deadline</span>
+              <span className="text-[11px] text-slate-400">
+                {hasDeadline
+                  ? 'Triggers Doomsday risk calculations and reminder alerts.'
+                  : 'Flexible activity / general self-study without submission panic.'}
+              </span>
             </div>
-          )}
-
-          {/* Due Date Switcher */}
-          <div className="space-y-2 pt-1 border-t border-slate-800/80">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-300">Deadline / Due Time</label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDueOption('hours')}
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    dueOption === 'hours'
-                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                      : 'text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  Hours Left
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDueOption('custom')}
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    dueOption === 'custom'
-                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                      : 'text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  Specific Date & Time
-                </button>
-              </div>
-            </div>
-
-            {dueOption === 'hours' ? (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400">Hours Until Due</label>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    min="0.5"
-                    value={hoursLeft}
-                    onChange={(e) => setHoursLeft(Number(e.target.value))}
-                    className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400">Estimated Effort (Hrs)</label>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    min="0.5"
-                    value={estimatedHours}
-                    onChange={(e) => setEstimatedHours(Number(e.target.value))}
-                    className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400">Due Date</label>
-                  <Input
-                    type="date"
-                    value={customDate}
-                    onChange={(e) => setCustomDate(e.target.value)}
-                    className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400">Due Time</label>
-                  <Input
-                    type="time"
-                    value={customTime}
-                    onChange={(e) => setCustomTime(e.target.value)}
-                    className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
-                  />
-                </div>
-              </div>
-            )}
+            <Switch checked={hasDeadline} onCheckedChange={setHasDeadline} />
           </div>
 
-          {/* Reminder Timing Selector */}
-          <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
-            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <Bell className="w-3.5 h-3.5 text-rose-400" />
-              Background Reminder Timing (Multi-Select)
-            </label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {REMINDER_OPTIONS.map((opt) => {
-                const isSelected = selectedReminders.includes(opt);
-                return (
+          {/* Due Date Controls if Deadline Active */}
+          {hasDeadline && (
+            <div className="space-y-2 pt-1 border-t border-slate-800/80">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300">Deadline / Due Time</label>
+                <div className="flex gap-2">
                   <button
-                    key={opt}
                     type="button"
-                    onClick={() => toggleReminder(opt)}
-                    className={`p-1.5 rounded-lg border text-[10px] font-medium transition-all text-left ${
-                      isSelected
-                        ? 'bg-rose-500/20 border-rose-500 text-rose-300'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                    onClick={() => setDueOption('hours')}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      dueOption === 'hours'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
-                    {REMINDER_LABEL_MAP[opt]}
+                    Hours Left
                   </button>
-                );
-              })}
+                  <button
+                    type="button"
+                    onClick={() => setDueOption('custom')}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      dueOption === 'custom'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    Specific Date & Time
+                  </button>
+                </div>
+              </div>
+
+              {dueOption === 'hours' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-400">Hours Until Due</label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      value={hoursLeft}
+                      onChange={(e) => setHoursLeft(Number(e.target.value))}
+                      className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-400">Estimated Effort (Hrs)</label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      value={estimatedHours}
+                      onChange={(e) => setEstimatedHours(Number(e.target.value))}
+                      className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-400">Due Date</label>
+                    <Input
+                      type="date"
+                      value={customDate}
+                      onChange={(e) => setCustomDate(e.target.value)}
+                      className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-400">Due Time</label>
+                    <Input
+                      type="time"
+                      value={customTime}
+                      onChange={(e) => setCustomTime(e.target.value)}
+                      className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
+
+          {!hasDeadline && (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Estimated Duration (Hours)</label>
+              <Input
+                type="number"
+                step="0.5"
+                min="0.5"
+                value={estimatedHours}
+                onChange={(e) => setEstimatedHours(Number(e.target.value))}
+                className="bg-slate-900 border-slate-800 text-xs text-white font-mono"
+              />
+            </div>
+          )}
+
+          {/* Reminder Timing Selector if Deadline Active */}
+          {hasDeadline && (
+            <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5 text-rose-400" />
+                Background Reminder Timing (Multi-Select)
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {REMINDER_OPTIONS.map((opt) => {
+                  const isSelected = selectedReminders.includes(opt);
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => toggleReminder(opt)}
+                      className={`p-1.5 rounded-lg border text-[10px] font-medium transition-all text-left ${
+                        isSelected
+                          ? 'bg-rose-500/20 border-rose-500 text-rose-300'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {REMINDER_LABEL_MAP[opt]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-300">Description / Optional Notes</label>
             <Textarea
-              placeholder="Key notes, location, or sub-tasks..."
+              placeholder="Key notes or sub-tasks..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="bg-slate-900 border-slate-800 text-xs text-white h-16"

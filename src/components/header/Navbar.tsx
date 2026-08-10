@@ -15,7 +15,8 @@ import {
   ChevronDown,
   HelpCircle,
   RotateCcw,
-  Bell
+  Bell,
+  BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,12 +36,16 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, currentUser, logout, loginDemoAccount, replayTutorial, hasCompletedTutorial, setNotificationModalOpen } = useRipple();
+  const { debt, studyLogs, currentUser, logout, loginDemoAccount, replayTutorial, hasCompletedTutorial, setNotificationModalOpen } = useRipple();
 
   const activeDemoPersona = ALL_PERSONAS.find(p => p.id === currentUser?.demoPersonaId);
 
+  const totalStudyMins = studyLogs.reduce((acc, l) => acc + l.durationMinutes, 0);
+  const totalStudyHoursStr = `${Math.floor(totalStudyMins / 60)}h`;
+
   const navItems = [
     { id: 'warroom', tourKey: 'warroom-tab', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
+    { id: 'study', tourKey: 'study-tab', label: 'Study Tracker', icon: BookOpen, badge: totalStudyMins > 0 ? totalStudyHoursStr : null },
     { id: 'calendar', tourKey: 'calendar-tab', label: 'Live Calendar', icon: CalendarDays },
     { id: 'timetable', tourKey: 'timetable-tab', label: 'Timetable & Context', icon: Calendar },
     { id: 'evidence', tourKey: 'evidence-tab', label: 'Evidence Case File', icon: FileText },

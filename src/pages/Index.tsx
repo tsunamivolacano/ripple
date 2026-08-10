@@ -3,6 +3,7 @@ import { RippleProvider, useRipple } from '@/context/RippleContext';
 import { AuthPage } from '@/components/auth/AuthPage';
 import { Navbar } from '@/components/header/Navbar';
 import { WarRoom } from '@/components/doomsday/WarRoom';
+import { StudyTrackerView } from '@/components/study/StudyTrackerView';
 import { PredictionView } from '@/components/prediction/PredictionView';
 import { FocusModeModal } from '@/components/prediction/FocusModeModal';
 import { RenegotiateModal } from '@/components/prediction/RenegotiateModal';
@@ -12,6 +13,7 @@ import { EvidenceLogView } from '@/components/evidence/EvidenceLogView';
 import { DebtLedgerView } from '@/components/debt/DebtLedgerView';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
+import { NotificationSettingsModal } from '@/components/settings/NotificationSettingsModal';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot';
 import { Task } from '@/types/ripple';
@@ -22,6 +24,8 @@ const RippleAppContent: React.FC = () => {
     activeTaskForPrediction,
     activeFocusTask,
     completedTaskForCelebration,
+    isNotificationModalOpen,
+    setNotificationModalOpen,
     setActiveTaskForPrediction,
     setActiveFocusTask,
     setCompletedTaskForCelebration
@@ -54,6 +58,8 @@ const RippleAppContent: React.FC = () => {
           />
         )}
 
+        {activeTab === 'study' && <StudyTrackerView />}
+
         {activeTab === 'calendar' && (
           <CalendarView
             onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
@@ -74,6 +80,12 @@ const RippleAppContent: React.FC = () => {
 
       {/* Single Detailed Step-by-Step Tutorial Overlay */}
       <TutorialOverlay onTabChange={(tab) => setActiveTab(tab)} />
+
+      {/* Notification Settings Modal */}
+      <NotificationSettingsModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setNotificationModalOpen(false)}
+      />
 
       {/* Modals & Overlays */}
       <PredictionView

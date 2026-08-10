@@ -36,7 +36,7 @@ export const CalendarModals: React.FC<CalendarModalsProps> = ({
             <DialogHeader>
               <div className="flex items-center gap-2 mb-1">
                 <Badge className={getStatusTheme(selectedTask.status).badge}>
-                  {getStatusTheme(selectedTask.status).label}
+                  {selectedTask.hasDeadline === false ? 'Self-Paced' : getStatusTheme(selectedTask.status).label}
                 </Badge>
               </div>
               <DialogTitle className="text-lg font-bold text-white">
@@ -46,12 +46,14 @@ export const CalendarModals: React.FC<CalendarModalsProps> = ({
 
             <div className="space-y-3 my-2 text-xs">
               <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                <span className="text-slate-400 font-semibold block">Local Due Date & Time:</span>
+                <span className="text-slate-400 font-semibold block">Timing:</span>
                 <span className="font-mono text-amber-300 font-bold">
-                  {new Date(selectedTask.dueDate).toLocaleString([], {
-                    dateStyle: 'full',
-                    timeStyle: 'short'
-                  })}
+                  {selectedTask.dueDate
+                    ? new Date(selectedTask.dueDate).toLocaleString([], {
+                        dateStyle: 'full',
+                        timeStyle: 'short'
+                      })
+                    : 'Flexible Self-Study / No Deadline'}
                 </span>
               </div>
 
@@ -61,19 +63,21 @@ export const CalendarModals: React.FC<CalendarModalsProps> = ({
             </div>
 
             <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-slate-800">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const t = selectedTask;
-                  onCloseTaskModal();
-                  onOpenPrediction(t);
-                }}
-                className="bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs text-amber-300 gap-1.5"
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                Predict Forecast
-              </Button>
+              {selectedTask.hasDeadline !== false ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const t = selectedTask;
+                    onCloseTaskModal();
+                    onOpenPrediction(t);
+                  }}
+                  className="bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs text-amber-300 gap-1.5"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  Predict Forecast
+                </Button>
+              ) : <div />}
 
               <div className="flex items-center gap-2">
                 <Button
@@ -99,7 +103,7 @@ export const CalendarModals: React.FC<CalendarModalsProps> = ({
                   className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs gap-1.5"
                 >
                   <Play className="w-3.5 h-3.5 fill-white" />
-                  Start Focus Sprint
+                  Start Focus Timer
                 </Button>
               </div>
             </div>

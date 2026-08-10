@@ -100,7 +100,9 @@ export const MonthViewGrid: React.FC<MonthViewGridProps> = ({
                           className={`p-1 rounded text-[10px] truncate cursor-pointer border ${theme.bgClass}`}
                         >
                           <span className="font-bold">
-                            {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {task.dueDate
+                              ? new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : 'Self-Study'}
                           </span>{' '}
                           {task.title}
                         </div>

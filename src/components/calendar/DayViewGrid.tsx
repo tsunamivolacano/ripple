@@ -62,7 +62,7 @@ export const DayViewGrid: React.FC<DayViewGridProps> = ({
           const { dayTasks, daySlots } = getItemsForDate(currentDate);
 
           const hourSlots = daySlots.filter((s) => parseInt(s.startTime.split(':')[0], 10) === hour);
-          const hourTasks = dayTasks.filter((t) => new Date(t.dueDate).getHours() === hour);
+          const hourTasks = dayTasks.filter((t) => t.dueDate && new Date(t.dueDate).getHours() === hour);
 
           const isCurrentHour = isTodayDay && today.getHours() === hour;
 
@@ -121,22 +121,26 @@ export const DayViewGrid: React.FC<DayViewGridProps> = ({
                               <div>
                                 <h4 className="text-xs font-bold text-white">{t.title}</h4>
                                 <span className="text-[10px] text-slate-300">
-                                  Due at {new Date(t.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {timeInfo.formattedRemaining}
+                                  {t.dueDate
+                                    ? `Due at ${new Date(t.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${timeInfo.formattedRemaining}`
+                                    : 'Self-Study Goal'}
                                 </span>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
                               <Badge className={theme.badge}>{theme.label}</Badge>
-                              <Button
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onOpenPrediction(t);
-                                }}
-                                className="bg-slate-900 hover:bg-slate-800 text-xs text-amber-300 h-7 px-2 gap-1 border border-slate-700"
-                              >
-                                <Zap className="w-3 h-3 text-amber-400" /> Predict
-                              </Button>
+                              {t.hasDeadline !== false && (
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenPrediction(t);
+                                  }}
+                                  className="bg-slate-900 hover:bg-slate-800 text-xs text-amber-300 h-7 px-2 gap-1 border border-slate-700"
+                                >
+                                  <Zap className="w-3 h-3 text-amber-400" /> Predict
+                                </Button>
+                              )}
                             </div>
                           </div>
                         );

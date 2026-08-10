@@ -14,7 +14,8 @@ import {
   Calendar,
   CheckSquare,
   Bell,
-  Trash2
+  Trash2,
+  BookOpen
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,11 +37,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const theme = getStatusTheme(task.status);
   const timeInfo = getTimeRemaining(task.dueDate);
 
-  const isPersonal = task.category === 'personal' || !slot || ['personal', 'meeting', 'appointment', 'reminder', 'event', 'chore'].includes(task.taskType);
+  const isPersonal = task.category === 'personal' || !slot || ['personal', 'meeting', 'appointment', 'reminder', 'event', 'chore', 'self_study'].includes(task.taskType);
 
   // Helper icon for task type
   const getTypeBadge = () => {
     switch (task.taskType) {
+      case 'self_study':
+        return { label: 'Self-Study', icon: BookOpen, color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' };
       case 'meeting':
         return { label: 'Meeting', icon: Briefcase, color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' };
       case 'appointment':
@@ -62,7 +65,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   // Buffer percentage calculation (0 to 100)
   const remainingWorkMinutes = task.estimatedHours * (1 - task.completionPercentage / 100) * 60;
   const timeBufferRatio = Math.max(0, timeInfo.totalMinutes / Math.max(remainingWorkMinutes, 15));
-  const bufferPercentage = Math.min(100, Math.round((timeBufferRatio / 3.0) * 100));
+  const bufferPercentage = task.hasDeadline === false ? 100 : Math.min(100, Math.round((timeBufferRatio / 3.0) * 100));
 
   return (
     <div data-tour="task-card" className={`relative rounded-2xl border p-5 transition-all duration-300 bg-gradient-to-b ${theme.gradient} border-slate-800 hover:border-slate-700 shadow-xl flex flex-col justify-between group`}>
@@ -72,7 +75,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <Badge className={theme.badge}>
-                {theme.label}
+                {task.hasDeadline === false ? 'Flexible Activity' : theme.label}
               </Badge>
 
               {slot ? (
@@ -88,7 +91,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               ) : (
                 <Badge variant="outline" className="bg-slate-900/80 text-slate-300 border-slate-700 text-[11px] gap-1">
                   <User className="w-3 h-3 text-indigo-400" />
-                  Personal
+                  General
                 </Badge>
               )}
             </div>
@@ -99,16 +102,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
 
           {/* Mini Gauge Display */}
-          <div data-tour="gauge-element" className="shrink-0 cursor-pointer" onClick={() => onOpenPrediction(task)}>
-            <DoomsdayGauge
-              status={task.status}
-              percentageRemaining={bufferPercentage}
-              size={68}
-              showInnerRings={false}
-              centerText={timeInfo.hours > 0 ? `${timeInfo.hours}h` : `${timeInfo.minutes}m`}
-              centerSubtext={timeInfo.isOverdue ? 'OVERDUE' : 'LEFT'}
-            />
-          </div>
+          {task.hasDeadline !== false ? (
+            <div data-tour="gauge-element" className="shrink-0 cursor-pointer" onClick={() => onOpenPrediction(task)}>
+              <DoomsdayGauge
+                status={task.status}
+                percentageRemaining={bufferPercentage}
+                size={68}
+                showInnerRings={false}
+                centerText={timeInfo.hours > 0 ? `${timeInfo.hours}h` : `${timeInfo.minutes}m`}
+                centerSubtext={timeInfo.isOverdue ? 'OVERDUE' : 'LEFT'}
+              />
+            </div>
+          ) : (
+            <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-center shrink-0">
+              <span className="text-[10px] font-bold text-emerald-400 font-mono block">Self-Paced</span>
+              <span className="text-[9px] text-slate-500">No Deadline</span>
+            </div>
+          )}
         </div>
 
         {/* Task description */}
@@ -142,9 +152,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         ) : (
           <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800/80 text-xs mb-4 flex items-center justify-between text-slate-400 font-mono">
-            <span>Due Local:</span>
+            <span>Timing:</span>
             <span className="text-slate-200 font-bold">
-              {new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {task.hasDeadline !== false && task.dueDate
+                ? new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Flexible Self-Study'}
             </span>
           </div>
         )}
@@ -172,25 +184,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
       {/* Action Footer Buttons */}
       <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
-        <Button
-          data-tour="predict-btn"
-          variant="outline"
-          size="sm"
-          onClick={() => onOpenPrediction(task)}
-          className="flex-1 bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs text-slate-200 gap-1.5 py-1.5 h-auto"
-        >
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
-          Predict Consequence
-        </Button>
+        {task.hasDeadline !== false && (
+          <Button
+            data-tour="predict-btn"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenPrediction(task)}
+            className="flex-1 bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs text-slate-200 gap-1.5 py-1.5 h-auto"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+            Predict
+          </Button>
+        )}
 
         <Button
           data-tour="start-btn"
           size="sm"
           onClick={() => onOpenFocus(task)}
-          className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold gap-1.5 py-1.5 h-auto"
+          className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold gap-1.5 py-1.5 h-auto flex-1"
         >
           <Play className="w-3.5 h-3.5 fill-white" />
-          Start Now
+          Start Timer
         </Button>
 
         {task.completionPercentage < 100 && (

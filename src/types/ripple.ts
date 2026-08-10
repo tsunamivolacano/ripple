@@ -30,7 +30,8 @@ export type TaskType =
   | 'appointment'
   | 'reminder'
   | 'event'
-  | 'chore';
+  | 'chore'
+  | 'self_study';
 
 export type TaskCategory = 'academic' | 'personal';
 
@@ -56,7 +57,8 @@ export interface Task {
   title: string;
   description?: string;
   slotId?: string;
-  dueDate: string; // ISO String in UTC
+  hasDeadline?: boolean;
+  dueDate?: string; // ISO String in UTC
   estimatedHours: number;
   completionPercentage: number;
   taskType: TaskType;
@@ -118,6 +120,15 @@ export interface EvidenceEntry {
   accuracyRating: number; // 1-5
   dateLogged: string;
   userNotes?: string;
+}
+
+export interface StudyLog {
+  id: string;
+  subject: string;
+  durationMinutes: number;
+  topic?: string;
+  loggedAt: string; // ISO string
+  source: 'manual' | 'timer';
 }
 
 export interface ProcrastinationDebt {

@@ -1,12 +1,22 @@
 import { TaskStatus } from '@/types/ripple';
 
-export function getTimeRemaining(dueDateISO: string): {
+export function getTimeRemaining(dueDateISO?: string): {
   totalMinutes: number;
   hours: number;
   minutes: number;
   isOverdue: boolean;
   formattedRemaining: string;
 } {
+  if (!dueDateISO) {
+    return {
+      totalMinutes: 999999,
+      hours: 999,
+      minutes: 0,
+      isOverdue: false,
+      formattedRemaining: 'No deadline'
+    };
+  }
+
   const now = new Date().getTime();
   const due = new Date(dueDateISO).getTime();
   const diffMs = due - now;
@@ -43,13 +53,18 @@ export function getTimeRemaining(dueDateISO: string): {
 }
 
 export function calculateTaskStatus(
-  dueDateISO: string,
+  dueDateISO: string | undefined,
   estimatedHours: number,
   completionPercentage: number,
-  velocityMultiplier: number = 1.0
+  velocityMultiplier: number = 1.0,
+  hasDeadline: boolean = true
 ): TaskStatus {
   if (completionPercentage >= 100) {
     return 'completed';
+  }
+
+  if (!hasDeadline || !dueDateISO) {
+    return 'manageable';
   }
 
   const { totalMinutes, isOverdue } = getTimeRemaining(dueDateISO);
@@ -63,7 +78,7 @@ export function calculateTaskStatus(
   const timeBufferRatio = totalMinutes / Math.max(remainingWorkMinutes, 15);
 
   if (timeBufferRatio < 1.0) {
-    return 'too_late'; // Cannot physically complete in time without speed magic
+    return 'too_late';
   } else if (timeBufferRatio < 1.5) {
     return 'critical';
   } else if (timeBufferRatio < 3.0) {

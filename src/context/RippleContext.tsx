@@ -3,6 +3,7 @@ import {
   TimetableSlot, 
   Task, 
   EvidenceEntry, 
+  StudyLog,
   ProcrastinationDebt, 
   UserSettings,
   StrictnessTag,
@@ -42,6 +43,7 @@ interface RippleContextType {
   slots: TimetableSlot[];
   tasks: Task[];
   evidenceEntries: EvidenceEntry[];
+  studyLogs: StudyLog[];
   debt: ProcrastinationDebt;
   settings: UserSettings;
   notificationSettings: NotificationSettings;
@@ -91,6 +93,10 @@ interface RippleContextType {
   // Evidence log management
   logEvidence: (entry: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => Promise<void>;
 
+  // Study Tracker management
+  addStudyLog: (log: Omit<StudyLog, 'id' | 'loggedAt'>) => Promise<void>;
+  deleteStudyLog: (id: string) => Promise<void>;
+
   // Settings
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
   
@@ -100,6 +106,25 @@ interface RippleContextType {
 }
 
 const defaultPersona = PERSONAS_MAP['riya'];
+
+const initialStudyLogs: StudyLog[] = [
+  {
+    id: 'st-1',
+    subject: 'Physics',
+    durationMinutes: 90,
+    topic: 'Wave Optics & Double Slit Interference',
+    loggedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    source: 'manual'
+  },
+  {
+    id: 'st-2',
+    subject: 'Mathematics',
+    durationMinutes: 60,
+    topic: 'Calculus Definite Integration Problems',
+    loggedAt: new Date(Date.now() - 3600000 * 20).toISOString(),
+    source: 'timer'
+  }
+];
 
 const emptyDebt: ProcrastinationDebt = {
   totalHoursBehind: 0,
@@ -166,6 +191,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>([]);
+  const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
   const [debt, setDebt] = useState<ProcrastinationDebt>(emptyDebt);
   const [settings, setSettings] = useState<UserSettings>(emptySettings);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(defaultNotificationSettings);
@@ -196,6 +222,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setSlots(persona.slots);
       setTasks(persona.tasks);
       setEvidenceEntries(persona.evidenceEntries);
+      setStudyLogs(initialStudyLogs);
       setDebt(persona.debt);
       setSettings(persona.settings);
       setNotificationSettings(defaultNotificationSettings);
@@ -208,6 +235,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const localSlots = safeGetStorage<TimetableSlot[] | null>(`ripple_slots_${uKey}`, null);
     const localTasks = safeGetStorage<Task[] | null>(`ripple_tasks_${uKey}`, null);
     const localEvidence = safeGetStorage<EvidenceEntry[] | null>(`ripple_evidence_${uKey}`, null);
+    const localStudy = safeGetStorage<StudyLog[] | null>(`ripple_study_${uKey}`, null);
     const localDebt = safeGetStorage<ProcrastinationDebt | null>(`ripple_debt_${uKey}`, null);
     const localSettings = safeGetStorage<UserSettings | null>(`ripple_settings_${uKey}`, null);
     const localNotifSettings = safeGetStorage<NotificationSettings | null>(`ripple_notif_settings_${uKey}`, null);
@@ -221,6 +249,9 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (localEvidence !== null) setEvidenceEntries(localEvidence);
     else setEvidenceEntries([]);
 
+    if (localStudy !== null) setStudyLogs(localStudy);
+    else setStudyLogs(initialStudyLogs);
+
     if (localDebt !== null) setDebt(localDebt);
     else setDebt(emptyDebt);
 
@@ -231,71 +262,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     else setNotificationSettings(defaultNotificationSettings);
 
     setHasCompletedTutorial(safeGetStorage(`ripple_tutorial_completed_${uKey}`, false));
-
-    if (!user.isLocalSession && !user.isDemo) {
-      try {
-        const [slotsRes, tasksRes, evidenceRes, settingsRes, debtRes, notifRes] = await Promise.all([
-          supabase.from('timetable_slots').select('*').eq('user_id', user.id),
-          supabase.from('tasks').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-          supabase.from('evidence_entries').select('*').eq('user_id', user.id).order('date_logged', { ascending: false }),
-          supabase.from('user_settings').select('*').eq('user_id', user.id).single(),
-          supabase.from('user_debt').select('*').eq('user_id', user.id).single(),
-          supabase.from('notification_settings').select('*').eq('user_id', user.id).single()
-        ]);
-
-        if (!slotsRes.error && slotsRes.data) {
-          const dbSlots: TimetableSlot[] = slotsRes.data.map((s) => ({
-            id: s.id,
-            subject: s.subject,
-            dayOfWeek: s.day_of_week as TimetableSlot['dayOfWeek'],
-            startTime: s.start_time,
-            endTime: s.end_time,
-            room: s.room || '',
-            teacherName: s.teacher_name,
-            strictnessTag: s.strictness_tag as StrictnessTag,
-            stakesTag: s.stakes_tag as StakesTag,
-            weight: Number(s.weight || 25),
-            notes: s.notes || undefined
-          }));
-          setSlots(dbSlots);
-          safeSetStorage(`ripple_slots_${uKey}`, dbSlots);
-        }
-
-        if (!tasksRes.error && tasksRes.data) {
-          const dbTasks: Task[] = tasksRes.data.map((t) => ({
-            id: t.id,
-            title: t.title,
-            description: t.description || undefined,
-            slotId: t.slot_id || undefined,
-            dueDate: t.due_date,
-            estimatedHours: Number(t.estimated_hours || 1),
-            completionPercentage: Number(t.completion_percentage || 0),
-            taskType: t.task_type as TaskType,
-            category: (t.category || 'academic') as TaskCategory,
-            status: t.status as TaskStatus,
-            createdAt: t.created_at,
-            completedAt: t.completed_at || undefined,
-            renegotiatedCount: t.renegotiated_count || 0,
-            lastRenegotiatedAt: t.last_renegotiated_at || undefined
-          }));
-          setTasks(dbTasks);
-          safeSetStorage(`ripple_tasks_${uKey}`, dbTasks);
-        }
-
-        if (!notifRes.error && notifRes.data) {
-          const dbNotif: NotificationSettings = {
-            taskRemindersEnabled: notifRes.data.task_reminders_enabled,
-            classRemindersEnabled: notifRes.data.class_reminders_enabled,
-            defaultTaskReminders: Array.isArray(notifRes.data.default_task_reminders) ? notifRes.data.default_task_reminders : ['15m', 'exact'],
-            defaultClassReminders: Array.isArray(notifRes.data.default_class_reminders) ? notifRes.data.default_class_reminders : ['15m']
-          };
-          setNotificationSettings(dbNotif);
-          safeSetStorage(`ripple_notif_settings_${uKey}`, dbNotif);
-        }
-      } catch (err) {
-        console.warn('Network sync exception:', err);
-      }
-    }
 
     setIsLoadingData(false);
   };
@@ -341,12 +307,13 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_slots_${uKey}`, slots);
       safeSetStorage(`ripple_tasks_${uKey}`, tasks);
       safeSetStorage(`ripple_evidence_${uKey}`, evidenceEntries);
+      safeSetStorage(`ripple_study_${uKey}`, studyLogs);
       safeSetStorage(`ripple_debt_${uKey}`, debt);
       safeSetStorage(`ripple_settings_${uKey}`, settings);
       safeSetStorage(`ripple_notif_settings_${uKey}`, notificationSettings);
       safeSetStorage(`ripple_tutorial_completed_${uKey}`, hasCompletedTutorial);
     }
-  }, [slots, tasks, evidenceEntries, debt, settings, notificationSettings, hasCompletedTutorial]);
+  }, [slots, tasks, evidenceEntries, studyLogs, debt, settings, notificationSettings, hasCompletedTutorial]);
 
   // Dynamic status updater ticker
   useEffect(() => {
@@ -354,7 +321,13 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setTasks((prevTasks) =>
         prevTasks.map((t) => {
           if (t.status === 'completed' || t.status === 'renegotiated') return t;
-          const newStatus = calculateTaskStatus(t.dueDate, t.estimatedHours, t.completionPercentage, settings.personalVelocityMultiplier);
+          const newStatus = calculateTaskStatus(
+            t.dueDate,
+            t.estimatedHours,
+            t.completionPercentage,
+            settings.personalVelocityMultiplier,
+            t.hasDeadline ?? true
+          );
           return { ...t, status: newStatus };
         })
       );
@@ -396,7 +369,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password
       });
@@ -436,7 +409,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data } = await supabase.auth.signUp({
         email: cleanEmail,
         password: password
       });
@@ -496,6 +469,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setSlots([]);
       setTasks([]);
       setEvidenceEntries([]);
+      setStudyLogs([]);
       setDebt(emptyDebt);
       setSettings(emptySettings);
       setActiveTaskForPrediction(null);
@@ -518,27 +492,10 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_slots_${currentUser.id}`, updatedSlots);
     }
 
-    // Schedule Class Notifications
     const nextClassISO = getNextSlotDateISO(newSlot.dayOfWeek, newSlot.startTime);
     await scheduleClassNotifications(currentUser.id, newSlot, nextClassISO, notificationSettings);
 
     showSuccess(`Timetable slot for ${newSlot.subject} created with reminders.`);
-
-    if (!currentUser.isDemo && !currentUser.isLocalSession) {
-      await supabase.from('timetable_slots').insert({
-        user_id: currentUser.id,
-        subject: slotData.subject,
-        day_of_week: slotData.dayOfWeek,
-        start_time: slotData.startTime,
-        end_time: slotData.endTime,
-        room: slotData.room,
-        teacher_name: slotData.teacherName,
-        strictness_tag: slotData.strictnessTag,
-        stakes_tag: slotData.stakesTag,
-        weight: slotData.weight,
-        notes: slotData.notes
-      });
-    }
   };
 
   const updateSlot = async (updatedSlot: TimetableSlot) => {
@@ -552,25 +509,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const nextClassISO = getNextSlotDateISO(updatedSlot.dayOfWeek, updatedSlot.startTime);
     await scheduleClassNotifications(currentUser.id, updatedSlot, nextClassISO, notificationSettings);
-
-    if (!currentUser.isDemo && !currentUser.isLocalSession) {
-      await supabase
-        .from('timetable_slots')
-        .update({
-          subject: updatedSlot.subject,
-          day_of_week: updatedSlot.dayOfWeek,
-          start_time: updatedSlot.startTime,
-          end_time: updatedSlot.endTime,
-          room: updatedSlot.room,
-          teacher_name: updatedSlot.teacherName,
-          strictness_tag: updatedSlot.strictnessTag,
-          stakes_tag: updatedSlot.stakesTag,
-          weight: updatedSlot.weight,
-          notes: updatedSlot.notes
-        })
-        .eq('id', updatedSlot.id)
-        .eq('user_id', currentUser.id);
-    }
 
     showSuccess(`Updated ${updatedSlot.subject} class schedule.`);
   };
@@ -586,14 +524,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     await cancelItemNotifications(currentUser.id, id);
 
-    if (!currentUser.isDemo && !currentUser.isLocalSession) {
-      await supabase
-        .from('timetable_slots')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', currentUser.id);
-    }
-
     showSuccess('Timetable slot removed.');
   };
 
@@ -604,7 +534,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       taskData.dueDate,
       taskData.estimatedHours,
       taskData.completionPercentage,
-      settings.personalVelocityMultiplier
+      settings.personalVelocityMultiplier,
+      taskData.hasDeadline ?? true
     );
 
     const newTask: Task = {
@@ -620,25 +551,11 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_tasks_${currentUser.id}`, updatedTasks);
     }
 
-    // Schedule Background Notifications
-    await scheduleTaskNotifications(currentUser.id, newTask, notificationSettings);
-
-    showSuccess(`Task "${newTask.title}" added with background reminders.`);
-
-    if (!currentUser.isDemo && !currentUser.isLocalSession) {
-      await supabase.from('tasks').insert({
-        user_id: currentUser.id,
-        title: taskData.title,
-        description: taskData.description,
-        slot_id: taskData.slotId || null,
-        due_date: taskData.dueDate,
-        estimated_hours: taskData.estimatedHours,
-        completion_percentage: taskData.completionPercentage,
-        task_type: taskData.taskType,
-        category: taskData.category || 'academic',
-        status: computedStatus
-      });
+    if (newTask.hasDeadline && newTask.dueDate) {
+      await scheduleTaskNotifications(currentUser.id, newTask, notificationSettings);
     }
+
+    showSuccess(`Activity "${newTask.title}" added successfully.`);
   };
 
   const updateTaskProgress = async (taskId: string, percentage: number) => {
@@ -651,7 +568,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const isComplete = percentage >= 100;
         const updatedStatus = isComplete
           ? 'completed'
-          : calculateTaskStatus(t.dueDate, t.estimatedHours, percentage, settings.personalVelocityMultiplier);
+          : calculateTaskStatus(t.dueDate, t.estimatedHours, percentage, settings.personalVelocityMultiplier, t.hasDeadline ?? true);
 
         const updatedTask = {
           ...t,
@@ -664,7 +581,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         if (isComplete) {
           setCompletedTaskForCelebration(updatedTask);
-          // Cancel future reminders for completed tasks!
           cancelItemNotifications(currentUser.id, taskId);
 
           setDebt((d) => {
@@ -689,19 +605,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!currentUser.isDemo) {
       safeSetStorage(`ripple_tasks_${currentUser.id}`, updatedTasks);
     }
-
-    if (!currentUser.isDemo && !currentUser.isLocalSession && updatedTaskRef) {
-      const taskObj: Task = updatedTaskRef;
-      await supabase
-        .from('tasks')
-        .update({
-          completion_percentage: taskObj.completionPercentage,
-          status: taskObj.status,
-          completed_at: taskObj.completedAt || null
-        })
-        .eq('id', taskId)
-        .eq('user_id', currentUser.id);
-    }
   };
 
   const completeTask = async (taskId: string) => {
@@ -716,9 +619,10 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updatedTasks = tasks.map((t) => {
       if (t.id === taskId) {
         const count = (t.renegotiatedCount || 0) + 1;
-        const newStatus = calculateTaskStatus(newDueDate, t.estimatedHours, t.completionPercentage, settings.personalVelocityMultiplier);
+        const newStatus = calculateTaskStatus(newDueDate, t.estimatedHours, t.completionPercentage, settings.personalVelocityMultiplier, true);
         const obj: Task = {
           ...t,
+          hasDeadline: true,
           dueDate: newDueDate,
           renegotiatedCount: count,
           lastRenegotiatedAt: new Date().toISOString(),
@@ -749,20 +653,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_debt_${currentUser.id}`, updatedDebt);
     }
 
-    if (!currentUser.isDemo && !currentUser.isLocalSession && updatedTaskObj) {
-      const taskToSync: Task = updatedTaskObj;
-      await supabase
-        .from('tasks')
-        .update({
-          due_date: newDueDate,
-          renegotiated_count: taskToSync.renegotiatedCount,
-          last_renegotiated_at: taskToSync.lastRenegotiatedAt,
-          status: taskToSync.status
-        })
-        .eq('id', taskId)
-        .eq('user_id', currentUser.id);
-    }
-
     showSuccess('Task schedule renegotiated & notifications updated.');
   };
 
@@ -776,14 +666,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     await cancelItemNotifications(currentUser.id, id);
-
-    if (!currentUser.isDemo && !currentUser.isLocalSession) {
-      await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', currentUser.id);
-    }
 
     showSuccess('Task removed.');
   };
@@ -802,21 +684,33 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_evidence_${currentUser.id}`, updatedEvidence);
     }
     showSuccess('Outcome logged in Evidence Case File!');
+  };
 
-    if (!currentUser.isDemo && !currentUser.isLocalSession) {
-      await supabase.from('evidence_entries').insert({
-        user_id: currentUser.id,
-        task_id: entryData.taskId,
-        task_title: entryData.taskTitle,
-        subject: entryData.subject,
-        teacher_name: entryData.teacherName,
-        predicted_scenario: entryData.predictedScenario,
-        actual_outcome: entryData.actualOutcome,
-        was_on_time: entryData.wasOnTime,
-        accuracy_rating: entryData.accuracyRating,
-        user_notes: entryData.userNotes
-      });
+  const addStudyLog = async (logData: Omit<StudyLog, 'id' | 'loggedAt'>) => {
+    if (!currentUser) return;
+
+    const newLog: StudyLog = {
+      ...logData,
+      id: `study-${Date.now()}`,
+      loggedAt: new Date().toISOString()
+    };
+    const updatedLogs = [newLog, ...studyLogs];
+    setStudyLogs(updatedLogs);
+    if (!currentUser.isDemo) {
+      safeSetStorage(`ripple_study_${currentUser.id}`, updatedLogs);
     }
+    showSuccess(`Logged ${newLog.durationMinutes} minutes of study for ${newLog.subject}!`);
+  };
+
+  const deleteStudyLog = async (id: string) => {
+    if (!currentUser) return;
+
+    const updatedLogs = studyLogs.filter((l) => l.id !== id);
+    setStudyLogs(updatedLogs);
+    if (!currentUser.isDemo) {
+      safeSetStorage(`ripple_study_${currentUser.id}`, updatedLogs);
+    }
+    showSuccess('Study entry removed.');
   };
 
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
@@ -826,16 +720,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSettings(merged);
     if (!currentUser.isDemo) {
       safeSetStorage(`ripple_settings_${currentUser.id}`, merged);
-    }
-
-    if (!currentUser.isDemo && !currentUser.isLocalSession) {
-      await supabase.from('user_settings').upsert({
-        user_id: currentUser.id,
-        intensity_mode: merged.intensityMode,
-        is_minor_profile: merged.isMinorProfile,
-        weekly_digest_only: merged.weeklyDigestOnly,
-        personal_velocity_multiplier: merged.personalVelocityMultiplier
-      });
     }
 
     showSuccess('Settings updated.');
@@ -850,16 +734,6 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage(`ripple_notif_settings_${currentUser.id}`, merged);
     }
 
-    if (!currentUser.isDemo && !currentUser.isLocalSession) {
-      await supabase.from('notification_settings').upsert({
-        user_id: currentUser.id,
-        task_reminders_enabled: merged.taskRemindersEnabled,
-        class_reminders_enabled: merged.classRemindersEnabled,
-        default_task_reminders: merged.defaultTaskReminders,
-        default_class_reminders: merged.defaultClassReminders
-      });
-    }
-
     showSuccess('Notification preferences saved.');
   };
 
@@ -869,6 +743,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSlots(bundle.slots);
     setTasks(bundle.tasks);
     setEvidenceEntries(bundle.evidenceEntries);
+    setStudyLogs(initialStudyLogs);
     setDebt(bundle.debt);
     setSettings(bundle.settings);
     showSuccess(`Loaded template data: ${bundle.name}`);
@@ -878,11 +753,13 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSlots([]);
     setTasks([]);
     setEvidenceEntries([]);
+    setStudyLogs([]);
     setDebt(emptyDebt);
     if (currentUser && !currentUser.isDemo) {
       safeSetStorage(`ripple_slots_${currentUser.id}`, []);
       safeSetStorage(`ripple_tasks_${currentUser.id}`, []);
       safeSetStorage(`ripple_evidence_${currentUser.id}`, []);
+      safeSetStorage(`ripple_study_${currentUser.id}`, []);
       safeSetStorage(`ripple_debt_${currentUser.id}`, emptyDebt);
     }
     showSuccess('All data reset for active account.');
@@ -895,6 +772,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         slots,
         tasks,
         evidenceEntries,
+        studyLogs,
         debt,
         settings,
         notificationSettings,
@@ -930,6 +808,8 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         renegotiateTask,
         deleteTask,
         logEvidence,
+        addStudyLog,
+        deleteStudyLog,
         updateSettings,
         loadPersonaData,
         resetAllData
