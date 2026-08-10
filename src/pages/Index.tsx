@@ -16,11 +16,20 @@ import { NewTaskModal } from '@/components/task/NewTaskModal';
 import { NotificationSettingsModal } from '@/components/settings/NotificationSettingsModal';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Task } from '@/types/ripple';
+import { Shield, Eye, LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const RippleAppContent: React.FC = () => {
   const {
     currentUser,
+    isAdmin,
+    isAdminView,
+    setAdminView,
+    impersonatedUser,
+    startImpersonatingUser,
+    exitImpersonatedUser,
     activeTaskForPrediction,
     activeFocusTask,
     completedTaskForCelebration,
@@ -39,8 +48,40 @@ const RippleAppContent: React.FC = () => {
     return <AuthPage />;
   }
 
+  // Render Admin Dashboard if Admin View active
+  if (isAdmin && isAdminView) {
+    return (
+      <AdminLayout
+        onExitAdmin={() => setAdminView(false)}
+        onImpersonateUser={(u) => startImpersonatingUser(u)}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white relative">
+      {/* Sticky Support Mode / Impersonation Banner */}
+      {impersonatedUser && (
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 border-b border-purple-500/50 px-4 py-2 text-white flex items-center justify-between text-xs sticky top-0 z-50 shadow-xl">
+          <div className="flex items-center gap-2">
+            <Eye className="w-4 h-4 text-amber-400 animate-pulse" />
+            <span className="font-bold text-amber-300">SUPPORT MODE (ADMIN VIEW):</span>
+            <span className="text-slate-200">
+              Inspecting application as <strong className="text-white font-mono">{impersonatedUser.name} ({impersonatedUser.email})</strong>
+            </span>
+          </div>
+
+          <Button
+            size="sm"
+            onClick={exitImpersonatedUser}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs h-7 px-3 gap-1"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Exit User View
+          </Button>
+        </div>
+      )}
+
       {/* Top Navbar Header */}
       <Navbar
         activeTab={activeTab}

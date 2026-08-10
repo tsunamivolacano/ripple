@@ -16,7 +16,8 @@ import {
   HelpCircle,
   RotateCcw,
   Bell,
-  BookOpen
+  BookOpen,
+  Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +37,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
-  const { debt, studyLogs, currentUser, logout, loginDemoAccount, replayTutorial, hasCompletedTutorial, setNotificationModalOpen } = useRipple();
+  const { debt, studyLogs, currentUser, logout, loginDemoAccount, replayTutorial, hasCompletedTutorial, setNotificationModalOpen, isAdmin, setAdminView } = useRipple();
 
   const activeDemoPersona = ALL_PERSONAS.find(p => p.id === currentUser?.demoPersonaId);
 
@@ -78,6 +79,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
 
           {/* Header Action Controls */}
           <div className="flex items-center gap-2">
+            {/* Admin Command Center Trigger for Authorized Account */}
+            {isAdmin && (
+              <Button
+                onClick={() => setAdminView(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 h-9 px-3.5 shadow-lg shadow-purple-950 border border-purple-400/30 animate-pulse"
+              >
+                <Shield className="w-4 h-4 text-purple-200" />
+                <span className="hidden sm:inline">Admin Dashboard</span>
+              </Button>
+            )}
+
             <IntensitySelector />
 
             {/* Notification Settings Button */}
@@ -130,6 +142,19 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
                   Logged in as {currentUser?.isDemo ? 'Demo Account' : currentUser?.email}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-slate-800" />
+
+                {isAdmin && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => setAdminView(true)}
+                      className="cursor-pointer text-purple-300 hover:bg-purple-950/40 rounded-lg px-2.5 py-1.5 flex items-center gap-2 text-xs font-semibold"
+                    >
+                      <Shield className="w-3.5 h-3.5 text-purple-400" />
+                      Open Admin Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-slate-800" />
+                  </>
+                )}
 
                 <DropdownMenuItem
                   onClick={() => setNotificationModalOpen(true)}

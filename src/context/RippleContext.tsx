@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   TimetableSlot, 
   Task, 
@@ -8,10 +8,13 @@ import {
   UserSettings,
   NotificationSettings
 } from '@/types/ripple';
+import { AdminUserSummary } from '@/types/admin';
+import { isAuthorizedAdmin, logAdminAuditAction, AUTHORIZED_ADMIN_EMAIL } from '@/services/adminService';
 import { useRippleAuth, UserAccount, AuthResponse } from '@/hooks/useRippleAuth';
 import { useRippleTutorial } from '@/hooks/useRippleTutorial';
 import { useRippleData } from '@/hooks/useRippleData';
 import { registerServiceWorker } from '@/utils/notificationService';
+import { showSuccess } from '@/utils/toast';
 
 export type { UserAccount, AuthResponse };
 
@@ -29,6 +32,14 @@ interface RippleContextType {
   activeFocusTask: Task | null;
   completedTaskForCelebration: Task | null;
   isLoadingData: boolean;
+
+  // Admin & Support Impersonation State
+  isAdmin: boolean;
+  isAdminView: boolean;
+  setAdminView: (open: boolean) => void;
+  impersonatedUser: AdminUserSummary | null;
+  startImpersonatingUser: (user: AdminUserSummary) => void;
+  exitImpersonatedUser: () => void;
 
   // Notification Modal
   isNotificationModalOpen: boolean;
@@ -89,9 +100,30 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const tutorial = useRippleTutorial(auth.currentUser);
   const data = useRippleData(auth.currentUser);
 
+  const [isAdminView, setAdminView] = useState<boolean>(false);
+  const [impersonatedUser, setImpersonatedUser] = useState<AdminUserSummary | null>(null);
+
+  const isAdmin = isAuthorizedAdmin(auth.currentUser?.email);
+
   useEffect(() => {
     registerServiceWorker();
   }, []);
+
+  const startImpersonatingUser = (user: AdminUserSummary) => {
+    if (!isAdmin) return;
+    setImpersonatedUser(user);
+    setAdminView(false); // Switch to student app view with support banner
+    showSuccess(`Viewing app as ${user.name}`);
+  };
+
+  const exitImpersonatedUser = () => {
+    if (impersonatedUser) {
+      logAdminAuditAction('IMPERSONATE_USER_END', impersonatedUser.id, impersonatedUser.email, `Exited Support Mode for ${impersonatedUser.email}`);
+    }
+    setImpersonatedUser(null);
+    setAdminView(true); // Return to Admin Command Center
+    showSuccess('Exited Support Mode. Returned to Admin Dashboard.');
+  };
 
   return (
     <RippleContext.Provider
@@ -101,6 +133,13 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         signUpWithEmail: auth.signUpWithEmail,
         loginDemoAccount: auth.loginDemoAccount,
         logout: auth.logout,
+
+        isAdmin,
+        isAdminView,
+        setAdminView,
+        impersonatedUser,
+        startImpersonatingUser,
+        exitImpersonatedUser,
 
         isTutorialOpen: tutorial.isTutorialOpen,
         currentTutorialStep: tutorial.currentTutorialStep,
