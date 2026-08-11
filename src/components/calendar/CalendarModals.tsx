@@ -1,7 +1,8 @@
 import React from 'react';
 import { Task, TimetableSlot } from '@/types/ripple';
 import { getStatusTheme } from '@/utils/timeUtils';
-import { GraduationCap, Zap, Play, Trash2 } from 'lucide-react';
+import { formatRecurrenceLabel } from '@/utils/recurrenceUtils';
+import { GraduationCap, Zap, Play, Trash2, Repeat } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,13 +48,18 @@ export const CalendarModals: React.FC<CalendarModalsProps> = ({
             <div className="space-y-3 my-2 text-xs">
               <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
                 <span className="text-slate-400 font-semibold block">Timing:</span>
-                <span className="font-mono text-amber-300 font-bold">
+                <span className="font-mono text-amber-300 font-bold block">
                   {selectedTask.dueDate
                     ? new Date(selectedTask.dueDate).toLocaleString([], {
                         dateStyle: 'full',
                         timeStyle: 'short'
                       })
                     : 'Flexible Self-Study / No Deadline'}
+                </span>
+
+                <span className="text-[11px] text-indigo-300 font-semibold flex items-center gap-1 pt-1">
+                  <Repeat className="w-3.5 h-3.5 text-indigo-400" />
+                  {formatRecurrenceLabel(selectedTask.recurrence, selectedTask.dueDate)}
                 </span>
               </div>
 
@@ -133,6 +139,11 @@ export const CalendarModals: React.FC<CalendarModalsProps> = ({
                 <div className="text-slate-400">
                   {selectedSlot.dayOfWeek}s • {selectedSlot.startTime} - {selectedSlot.endTime} ({selectedSlot.room})
                 </div>
+
+                <span className="text-[11px] text-indigo-300 font-semibold flex items-center gap-1 pt-1">
+                  <Repeat className="w-3.5 h-3.5 text-indigo-400" />
+                  {selectedSlot.specificDate ? `One-time session on ${selectedSlot.specificDate}` : formatRecurrenceLabel(selectedSlot.recurrence)}
+                </span>
               </div>
 
               <div className="flex items-center gap-2 pt-1">

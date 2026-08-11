@@ -37,6 +37,17 @@ export type TaskCategory = 'academic' | 'personal';
 
 export type ReminderTiming = 'exact' | '5m' | '15m' | '30m' | '1h' | '1d' | 'overdue';
 
+export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
+
+export interface RecurrenceRule {
+  type: RecurrenceType;
+  interval?: number; // e.g. 1 = every week, 2 = every 2 weeks
+  daysOfWeek?: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD optional cutoff
+  count?: number;     // max occurrences
+}
+
 export interface TimetableSlot {
   id: string;
   subject: string;
@@ -49,6 +60,8 @@ export interface TimetableSlot {
   stakesTag: StakesTag;
   weight: number; // 1 to 100%
   reminders?: ReminderTiming[];
+  recurrence?: RecurrenceRule;
+  specificDate?: string; // YYYY-MM-DD for single-occurrence / only-this-week class
   notes?: string;
 }
 
@@ -63,8 +76,8 @@ export interface Task {
   completionPercentage: number;
   taskType: TaskType;
   category?: TaskCategory;
-  status: TaskStatus;
   reminders?: ReminderTiming[];
+  recurrence?: RecurrenceRule;
   createdAt: string;
   completedAt?: string;
   renegotiatedCount?: number;

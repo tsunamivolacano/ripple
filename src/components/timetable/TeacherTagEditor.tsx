@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { TimetableSlot, StrictnessTag, StakesTag } from '@/types/ripple';
+import { TimetableSlot, StrictnessTag, StakesTag, RecurrenceType, RecurrenceRule } from '@/types/ripple';
 import { useRipple } from '@/context/RippleContext';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Repeat, Calendar } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,10 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
   const [stakesTag, setStakesTag] = useState<StakesTag>('GRADED_QUIZ');
   const [weight, setWeight] = useState<number>(25);
 
+  // Google Calendar Recurrence Options
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('weekly');
+  const [specificDate, setSpecificDate] = useState<string>('');
+
   useEffect(() => {
     if (editingSlot) {
       setSubject(editingSlot.subject);
@@ -41,18 +45,27 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
       setStrictnessTag(editingSlot.strictnessTag);
       setStakesTag(editingSlot.stakesTag);
       setWeight(editingSlot.weight);
+      setRecurrenceType(editingSlot.recurrence?.type || 'weekly');
+      setSpecificDate(editingSlot.specificDate || '');
     } else {
       setSubject('');
       setTeacherName('');
       setStartTime('09:00');
       setEndTime('10:15');
       setWeight(25);
+      setRecurrenceType('weekly');
+      setSpecificDate('');
     }
   }, [editingSlot, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject || !teacherName) return;
+
+    const recurrenceRule: RecurrenceRule = {
+      type: recurrenceType,
+      daysOfWeek: recurrenceType === 'weekly' ? [dayOfWeek] : undefined
+    };
 
     if (editingSlot) {
       updateSlot({
@@ -65,7 +78,9 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
         teacherName,
         strictnessTag,
         stakesTag,
-        weight
+        weight,
+        recurrence: recurrenceRule,
+        specificDate: recurrenceType === 'none' ? specificDate : undefined
       });
     } else {
       addSlot({
@@ -77,7 +92,9 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
         teacherName,
         strictnessTag,
         stakesTag,
-        weight
+        weight,
+        recurrence: recurrenceRule,
+        specificDate: recurrenceType === 'none' ? specificDate : undefined
       });
     }
 
@@ -165,6 +182,39 @@ export const TeacherTagEditor: React.FC<TeacherTagEditorProps> = ({
                 className="bg-slate-900 border-slate-800 text-xs text-white"
               />
             </div>
+          </div>
+
+          {/* Google Calendar Recurrence for Timetable Slots */}
+          <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-indigo-300 flex items-center gap-1.5">
+                <Repeat className="w-3.5 h-3.5 text-indigo-400" />
+                Schedule Recurrence Mode
+              </label>
+              <Select value={recurrenceType} onValueChange={(v: any) => setRecurrenceType(v)}>
+                <SelectTrigger className="w-44 bg-slate-950 border-slate-800 text-xs text-white h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  <SelectItem value="weekly">Repeats Weekly on {dayOfWeek}s</SelectItem>
+                  <SelectItem value="none">One-time / Only this specific date</SelectItem>
+                  <SelectItem value="daily">Repeats Daily</SelectItem>
+                  <SelectItem value="biweekly">Repeats Every 2 Weeks</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {recurrenceType === 'none' && (
+              <div className="space-y-1 pt-1">
+                <label className="text-[11px] font-semibold text-slate-400">Specific Date (One-time Class Session)</label>
+                <Input
+                  type="date"
+                  value={specificDate}
+                  onChange={(e) => setSpecificDate(e.target.value)}
+                  className="bg-slate-950 border-slate-800 text-xs text-white h-8 font-mono"
+                />
+              </div>
+            )}
           </div>
 
           {/* Teacher Strictness & Stakes */}

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
-import { TaskType, TaskCategory, ReminderTiming } from '@/types/ripple';
+import { TaskType, TaskCategory, ReminderTiming, RecurrenceType, RecurrenceRule } from '@/types/ripple';
 import { REMINDER_LABEL_MAP } from '@/utils/notificationService';
-import { Plus, GraduationCap, User, Bell, Clock, ShieldCheck } from 'lucide-react';
+import { Plus, GraduationCap, User, Bell, Clock, Repeat, Calendar } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ interface NewTaskModalProps {
 }
 
 const REMINDER_OPTIONS: ReminderTiming[] = ['exact', '5m', '15m', '30m', '1h', '1d'];
+const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 
 export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) => {
   const { addTask, slots, notificationSettings } = useRipple();
@@ -40,6 +41,13 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
   const [estimatedHours, setEstimatedHours] = useState(1.0);
   const [taskType, setTaskType] = useState<TaskType>('problem_set');
 
+  // Recurrence Google Calendar Controls
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('none');
+  const [repeatInterval, setRepeatInterval] = useState<number>(1);
+  const [selectedWeeklyDays, setSelectedWeeklyDays] = useState<string[]>(['Monday']);
+  const [hasEndDate, setHasEndDate] = useState<boolean>(false);
+  const [endDate, setEndDate] = useState<string>('');
+
   // Multi-reminder selection
   const [selectedReminders, setSelectedReminders] = useState<ReminderTiming[]>(
     notificationSettings.defaultTaskReminders || ['15m', 'exact']
@@ -49,7 +57,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
     setCategory(cat);
     if (cat === 'personal') {
       setTaskType('personal');
-      setHasDeadline(false); // Default flexible for general tasks
+      setHasDeadline(false);
     } else {
       setTaskType('problem_set');
       setHasDeadline(true);
@@ -61,6 +69,16 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
       setSelectedReminders(selectedReminders.filter((r) => r !== opt));
     } else {
       setSelectedReminders([...selectedReminders, opt]);
+    }
+  };
+
+  const toggleDayOfWeek = (day: string) => {
+    if (selectedWeeklyDays.includes(day)) {
+      if (selectedWeeklyDays.length > 1) {
+        setSelectedWeeklyDays(selectedWeeklyDays.filter((d) => d !== day));
+      }
+    } else {
+      setSelectedWeeklyDays([...selectedWeeklyDays, day]);
     }
   };
 
@@ -77,6 +95,17 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
       }
     }
 
+    let recurrenceRule: RecurrenceRule | undefined = undefined;
+    if (recurrenceType !== 'none') {
+      recurrenceRule = {
+        type: recurrenceType,
+        interval: repeatInterval,
+        daysOfWeek: recurrenceType === 'weekly' ? (selectedWeeklyDays as any) : undefined,
+        startDate: customDate,
+        endDate: hasEndDate ? endDate : undefined
+      };
+    }
+
     addTask({
       title,
       description,
@@ -87,12 +116,14 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
       completionPercentage: 0,
       taskType,
       category,
-      reminders: hasDeadline ? selectedReminders : []
+      reminders: hasDeadline ? selectedReminders : [],
+      recurrence: recurrenceRule
     });
 
     // Reset Form
     setTitle('');
     setDescription('');
+    setRecurrenceType('none');
     onClose();
   };
 
@@ -204,11 +235,91 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose }) =
             <Switch checked={hasDeadline} onCheckedChange={setHasDeadline} />
           </div>
 
+          {/* Google Calendar Recurrence Selector */}
+          <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-indigo-300 flex items-center gap-1.5">
+                <Repeat className="w-3.5 h-3.5 text-indigo-400" />
+                Recurrence (Google Calendar Style)
+              </label>
+              <Select value={recurrenceType} onValueChange={(v: any) => setRecurrenceType(v)}>
+                <SelectTrigger className="w-40 bg-slate-950 border-slate-800 text-xs text-white h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                  <SelectItem value="none">Does not repeat</SelectItem>
+                  <SelectItem value="daily">Every day</SelectItem>
+                  <SelectItem value="weekly">Every week</SelectItem>
+                  <SelectItem value="biweekly">Every 2 weeks</SelectItem>
+                  <SelectItem value="monthly">Every month</SelectItem>
+                  <SelectItem value="custom">Custom repeat...</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Recurrence Details */}
+            {recurrenceType === 'weekly' && (
+              <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                <span className="text-[11px] font-semibold text-slate-300 block">Repeat On Days:</span>
+                <div className="flex flex-wrap gap-1">
+                  {ALL_DAYS.map((d) => {
+                    const isSelected = selectedWeeklyDays.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => toggleDayOfWeek(d)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-slate-950 border border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {d.slice(0, 3)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {recurrenceType === 'custom' && (
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-xs">
+                <div>
+                  <span className="text-[11px] font-semibold text-slate-300 block mb-1">Repeat Interval</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={repeatInterval}
+                    onChange={(e) => setRepeatInterval(Number(e.target.value))}
+                    className="bg-slate-950 border-slate-800 text-xs font-mono text-white h-8"
+                  />
+                </div>
+              </div>
+            )}
+
+            {recurrenceType !== 'none' && (
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+                <span className="text-slate-300">Set End Date Cutoff?</span>
+                <Switch checked={hasEndDate} onCheckedChange={setHasEndDate} />
+              </div>
+            )}
+
+            {recurrenceType !== 'none' && hasEndDate && (
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-white h-8"
+              />
+            )}
+          </div>
+
           {/* Due Date Controls if Deadline Active */}
           {hasDeadline && (
             <div className="space-y-2 pt-1 border-t border-slate-800/80">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-slate-300">Deadline / Due Time</label>
+                <label className="text-xs font-semibold text-slate-300">Deadline / Start Time</label>
                 <div className="flex gap-2">
                   <button
                     type="button"

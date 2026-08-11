@@ -6,6 +6,7 @@ import { MonthViewGrid } from './MonthViewGrid';
 import { WeekViewGrid } from './WeekViewGrid';
 import { DayViewGrid } from './DayViewGrid';
 import { CalendarModals } from './CalendarModals';
+import { doesTaskOccurOnDate, doesSlotOccurOnDate } from '@/utils/recurrenceUtils';
 
 interface CalendarViewProps {
   onOpenPrediction: (task: Task) => void;
@@ -35,22 +36,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   const today = new Date();
 
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
-
-  const getDayName = (date: Date) =>
-    date.toLocaleDateString('en-US', { weekday: 'long' });
-
   const getItemsForDate = (date: Date) => {
-    const dayStr = getDayName(date);
     const dayTasks = tasks.filter((t) => {
       if (t.status === 'completed' && filterType === 'classes') return false;
-      const taskDate = new Date(t.dueDate);
-      return isSameDay(taskDate, date);
+      return doesTaskOccurOnDate(t, date);
     });
-    const daySlots = slots.filter((s) => s.dayOfWeek === dayStr);
+
+    const daySlots = slots.filter((s) => doesSlotOccurOnDate(s, date));
+
     return { dayTasks, daySlots };
   };
 
