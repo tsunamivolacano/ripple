@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRipple } from '@/context/RippleContext';
-import { FileText, CheckCircle2, Star } from 'lucide-react';
+import { FileText, Star } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,11 +15,19 @@ interface LogOutcomeModalProps {
 export const LogOutcomeModal: React.FC<LogOutcomeModalProps> = ({ isOpen, onClose }) => {
   const { logEvidence, tasks, slots } = useRipple();
 
-  const [selectedTaskId, setSelectedTaskId] = useState(tasks[0]?.id || '');
+  const [selectedTaskId, setSelectedTaskId] = useState('');
   const [actualOutcome, setActualOutcome] = useState('');
   const [wasOnTime, setWasOnTime] = useState(true);
   const [accuracyRating, setAccuracyRating] = useState(5);
   const [userNotes, setUserNotes] = useState('');
+
+  useEffect(() => {
+    if (isOpen && tasks.length > 0) {
+      if (!selectedTaskId || !tasks.some((t) => t.id === selectedTaskId)) {
+        setSelectedTaskId(tasks[0].id);
+      }
+    }
+  }, [isOpen, tasks, selectedTaskId]);
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
   const slot = slots.find((s) => s.id === selectedTask?.slotId);
@@ -40,6 +48,8 @@ export const LogOutcomeModal: React.FC<LogOutcomeModalProps> = ({ isOpen, onClos
       userNotes
     });
 
+    setActualOutcome('');
+    setUserNotes('');
     onClose();
   };
 

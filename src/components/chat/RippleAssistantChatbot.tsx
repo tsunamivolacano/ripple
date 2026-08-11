@@ -1,19 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { 
-  MessageSquare, 
   X, 
   Send, 
   Sparkles, 
   Bot, 
   User, 
   HelpCircle, 
-  Flame, 
-  Clock, 
-  TrendingDown, 
-  FileText, 
-  Calendar,
-  Zap,
   ChevronRight,
   Maximize2,
   Minimize2
@@ -34,7 +27,7 @@ interface Message {
 const KNOWLEDGE_BASE: { keywords: string[]; answer: string; chips?: string[] }[] = [
   {
     keywords: ['doomsday', 'gauge', 'dial', 'ring', 'circle', 'buffer'],
-    answer: "The **Doomsday Gauge** is RIPPLE's multi-ring risk dial:\n\n1. **Outer Ring**: Shows your remaining time buffer vs. estimated task work time.\n2. **Middle Ring**: Academic impact & teacher strictness risk.\n3. **Inner Ring**: Sleep & physical energy penalty.\n\n• **Green**: Healthy buffer ratio (> 3.0x)\n• **Yellow**: Tight schedule (1.5x - 3.0x)\n• **Red / Pulsing**: Critical doomsday warning (< 1.5x)",
+    answer: "The **Doomsday Gauge** is RIPPLE's multi-ring risk dial:\n\n1. **Outer Ring**: Shows your remaining time buffer vs. estimated task work time.\n2. **Academic Ring (Red)**: Grade weight & teacher strictness risk.\n3. **Social Ring (Yellow)**: Commitment & team impact.\n4. **Physical Ring (Purple)**: Sleep & energy penalty.\n\n• **Green**: Healthy buffer ratio (> 3.0x)\n• **Yellow**: Tight schedule (1.5x - 3.0x)\n• **Red / Pulsing**: Critical doomsday warning (< 1.5x)",
     chips: ['What is Coach vs Doomsday Mode?', 'How do I start a Focus Sprint?']
   },
   {

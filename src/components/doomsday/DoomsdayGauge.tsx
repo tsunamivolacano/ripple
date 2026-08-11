@@ -27,24 +27,27 @@ export const DoomsdayGauge: React.FC<DoomsdayGaugeProps> = ({
 }) => {
   const theme = getStatusTheme(status);
   
-  const strokeWidthOuter = 10;
-  const strokeWidthInner = 6;
+  const strokeWidthOuter = 9;
+  const strokeWidthInner = 5;
   const center = size / 2;
   
   const radiusOuter = center - strokeWidthOuter - 4;
-  const radiusMid = radiusOuter - 14;
-  const radiusInner = radiusMid - 10;
+  const radiusAcademic = radiusOuter - 11;
+  const radiusSocial = radiusAcademic - 8;
+  const radiusPhysical = radiusSocial - 8;
 
   const circumferenceOuter = 2 * Math.PI * radiusOuter;
-  const circumferenceMid = 2 * Math.PI * radiusMid;
-  const circumferenceInner = 2 * Math.PI * radiusInner;
+  const circumferenceAcademic = 2 * Math.PI * radiusAcademic;
+  const circumferenceSocial = 2 * Math.PI * radiusSocial;
+  const circumferencePhysical = 2 * Math.PI * radiusPhysical;
 
   // Clamped values
   const clampedTime = Math.min(100, Math.max(0, percentageRemaining));
   const strokeDashoffsetOuter = circumferenceOuter - (clampedTime / 100) * circumferenceOuter;
 
-  const strokeDashoffsetMid = circumferenceMid - (academicRisk / 100) * circumferenceMid;
-  const strokeDashoffsetInner = circumferenceInner - (physicalRisk / 100) * circumferenceInner;
+  const strokeDashoffsetAcademic = circumferenceAcademic - (academicRisk / 100) * circumferenceAcademic;
+  const strokeDashoffsetSocial = circumferenceSocial - (socialRisk / 100) * circumferenceSocial;
+  const strokeDashoffsetPhysical = circumferencePhysical - (physicalRisk / 100) * circumferencePhysical;
 
   return (
     <div className="relative flex items-center justify-center select-none" style={{ width: size, height: size }}>
@@ -71,7 +74,7 @@ export const DoomsdayGauge: React.FC<DoomsdayGaugeProps> = ({
           fill="transparent"
         />
         
-        {/* Outer Ring Value (Time Left) */}
+        {/* Outer Ring Value (Time Buffer Left) */}
         <circle
           cx={center}
           cy={center}
@@ -88,11 +91,11 @@ export const DoomsdayGauge: React.FC<DoomsdayGaugeProps> = ({
 
         {showInnerRings && (
           <>
-            {/* Mid Ring Background (Academic Risk) */}
+            {/* Academic Risk Ring */}
             <circle
               cx={center}
               cy={center}
-              r={radiusMid}
+              r={radiusAcademic}
               stroke="#0f172a"
               strokeWidth={strokeWidthInner}
               fill="transparent"
@@ -100,22 +103,22 @@ export const DoomsdayGauge: React.FC<DoomsdayGaugeProps> = ({
             <circle
               cx={center}
               cy={center}
-              r={radiusMid}
+              r={radiusAcademic}
               stroke="#f43f5e"
-              strokeOpacity="0.75"
+              strokeOpacity="0.85"
               strokeWidth={strokeWidthInner}
               fill="transparent"
-              strokeDasharray={circumferenceMid}
-              strokeDashoffset={strokeDashoffsetMid}
+              strokeDasharray={circumferenceAcademic}
+              strokeDashoffset={strokeDashoffsetAcademic}
               strokeLinecap="round"
               className="transition-all duration-700 ease-out"
             />
 
-            {/* Inner Ring Background (Physical Risk) */}
+            {/* Social Risk Ring */}
             <circle
               cx={center}
               cy={center}
-              r={radiusInner}
+              r={radiusSocial}
               stroke="#0f172a"
               strokeWidth={strokeWidthInner}
               fill="transparent"
@@ -123,13 +126,36 @@ export const DoomsdayGauge: React.FC<DoomsdayGaugeProps> = ({
             <circle
               cx={center}
               cy={center}
-              r={radiusInner}
-              stroke="#a855f7"
-              strokeOpacity="0.75"
+              r={radiusSocial}
+              stroke="#fbbf24"
+              strokeOpacity="0.85"
               strokeWidth={strokeWidthInner}
               fill="transparent"
-              strokeDasharray={circumferenceInner}
-              strokeDashoffset={strokeDashoffsetInner}
+              strokeDasharray={circumferenceSocial}
+              strokeDashoffset={strokeDashoffsetSocial}
+              strokeLinecap="round"
+              className="transition-all duration-700 ease-out"
+            />
+
+            {/* Physical / Energy Risk Ring */}
+            <circle
+              cx={center}
+              cy={center}
+              r={radiusPhysical}
+              stroke="#0f172a"
+              strokeWidth={strokeWidthInner}
+              fill="transparent"
+            />
+            <circle
+              cx={center}
+              cy={center}
+              r={radiusPhysical}
+              stroke="#c084fc"
+              strokeOpacity="0.85"
+              strokeWidth={strokeWidthInner}
+              fill="transparent"
+              strokeDasharray={circumferencePhysical}
+              strokeDashoffset={strokeDashoffsetPhysical}
               strokeLinecap="round"
               className="transition-all duration-700 ease-out"
             />
