@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
 
           {/* Header Action Controls */}
           <div className="flex items-center gap-2">
-            {/* Admin Command Center Trigger for Authorized Account */}
+            {/* Admin Command Center Trigger */}
             {isAdmin && (
               <Button
                 onClick={() => setAdminView(true)}
@@ -103,7 +103,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
               <Bell className="w-4 h-4 text-rose-400" />
             </Button>
 
-            {/* Replay Tutorial Button at Top */}
+            {/* Replay Tutorial Button */}
             <Button
               variant="outline"
               size="sm"
@@ -215,7 +215,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Direct Prominent Sign Out Button */}
+            {/* Direct Sign Out Button */}
             <Button
               variant="outline"
               size="sm"
