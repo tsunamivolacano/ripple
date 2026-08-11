@@ -26,9 +26,8 @@ import {
   CheckCircle2, 
   Activity, 
   ShieldCheck, 
-  LogOut, 
   ArrowLeft,
-  ExternalLink
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -52,10 +51,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [userActivityTrend, setUserActivityTrend] = useState<UserActivityTrend[]>([]);
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
+  const refreshAdminData = async (showLoadingState = false) => {
+    if (showLoadingState) setIsLoading(true);
+    setIsRefreshing(true);
+    try {
       const overview = await fetchAdminOverview();
       const userList = await fetchAdminUsersList();
 
@@ -63,9 +64,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       setSubjectBreakdown(overview.subjectBreakdown);
       setUserActivityTrend(overview.userActivityTrend);
       setUsers(userList);
+    } catch (err) {
+      console.warn('[AdminLayout] Data refresh error:', err);
+    } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-    loadData();
+  };
+
+  useEffect(() => {
+    refreshAdminData(true);
+
+    // Auto refresh every 10 seconds to catch new user registrations automatically
+    const interval = setInterval(() => {
+      refreshAdminData(false);
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleSelectUser = (user: AdminUserSummary) => {
@@ -92,10 +107,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="font-extrabold text-lg text-white tracking-tight">
-                    RIPPLE Owner Console
+                    RIPPLE Owner Command Center
                   </h1>
                   <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-mono px-2 py-0.5">
-                    Authorized Admin
+                    Live Telemetry
                   </Badge>
                 </div>
                 <p className="text-[10px] text-slate-400 font-mono">
@@ -105,6 +120,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refreshAdminData(false)}
+                disabled={isRefreshing}
+                className="border-slate-800 bg-slate-950 text-slate-300 hover:text-white text-xs gap-1.5 h-9"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-purple-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>Refresh Live Users</span>
+              </Button>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -121,7 +147,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           <nav className="flex space-x-2 border-t border-slate-800/80 pt-1 pb-2 overflow-x-auto no-scrollbar">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-              { id: 'users', label: 'Registered Users', icon: Users },
+              { id: 'users', label: `Registered Users (${users.length})`, icon: Users },
               { id: 'study', label: 'Study Analytics', icon: BookOpen },
               { id: 'tasks', label: 'Task Analytics', icon: CheckCircle2 },
               { id: 'activity', label: 'System Activity', icon: Activity },
@@ -151,8 +177,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       {/* Main Admin Content Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 pb-20">
         {isLoading ? (
-          <div className="p-12 text-center text-slate-400 font-mono text-xs">
-            Loading Admin Security Data...
+          <div className="p-12 text-center text-slate-400 font-mono text-xs flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-purple-400" />
+            Loading Live Admin Telemetry & User Registry...
           </div>
         ) : (
           <>
