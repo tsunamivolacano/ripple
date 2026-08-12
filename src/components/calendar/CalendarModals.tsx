@@ -1,8 +1,8 @@
 import React from 'react';
-import { Task, TimetableSlot } from '@/types/ripple';
+import { Task, TimetableSlot, StudyLog } from '@/types/ripple';
 import { getStatusTheme } from '@/utils/timeUtils';
 import { formatRecurrenceLabel } from '@/utils/recurrenceUtils';
-import { GraduationCap, Zap, Play, Trash2, Repeat, BookOpen, AlertOctagon, Trophy, FileText, Bell } from 'lucide-react';
+import { GraduationCap, Zap, Play, Trash2, Repeat, BookOpen, AlertOctagon, Trophy, FileText, Bell, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,23 +10,29 @@ import { Button } from '@/components/ui/button';
 interface CalendarModalsProps {
   selectedTask: Task | null;
   selectedSlot: TimetableSlot | null;
+  selectedStudyLog: StudyLog | null;
   onCloseTaskModal: () => void;
   onCloseSlotModal: () => void;
+  onCloseStudyLogModal: () => void;
   onOpenPrediction: (task: Task) => void;
   onOpenFocus: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onDeleteSlot: (slotId: string) => void;
+  onDeleteStudyLog: (logId: string) => void;
 }
 
 export const CalendarModals: React.FC<CalendarModalsProps> = ({
   selectedTask,
   selectedSlot,
+  selectedStudyLog,
   onCloseTaskModal,
   onCloseSlotModal,
+  onCloseStudyLogModal,
   onOpenPrediction,
   onOpenFocus,
   onDeleteTask,
-  onDeleteSlot
+  onDeleteSlot,
+  onDeleteStudyLog
 }) => {
   const getTaskTypeBadge = (type: string) => {
     switch (type) {
@@ -215,6 +221,80 @@ export const CalendarModals: React.FC<CalendarModalsProps> = ({
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Delete Class
+              </Button>
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* LOGGED STUDY SESSION DETAILS MODAL */}
+      <Dialog open={!!selectedStudyLog} onOpenChange={onCloseStudyLogModal}>
+        {selectedStudyLog && (
+          <DialogContent className="bg-slate-950 border-emerald-500/40 text-white max-w-md rounded-2xl p-6">
+            <DialogHeader>
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-1">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <DialogTitle className="text-lg font-bold text-white">
+                Logged Study Session: {selectedStudyLog.subject}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3 my-2 text-xs">
+              <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 font-semibold">Total Duration Logged:</span>
+                  <span className="font-mono text-emerald-400 font-extrabold text-sm">
+                    {Math.floor(selectedStudyLog.durationMinutes / 60) > 0
+                      ? `${Math.floor(selectedStudyLog.durationMinutes / 60)}h ${selectedStudyLog.durationMinutes % 60}m`
+                      : `${selectedStudyLog.durationMinutes}m`}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Logged Date & Time:</span>
+                  <span className="font-mono text-slate-200">
+                    {new Date(selectedStudyLog.loggedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Source:</span>
+                  <span className="font-mono capitalize text-slate-300">
+                    {selectedStudyLog.source === 'timer' ? '⏱️ Live Focus Timer / Stopwatch' : '✍️ Manual Log'}
+                  </span>
+                </div>
+              </div>
+
+              {selectedStudyLog.topic && (
+                <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-1">
+                  <span className="text-[11px] font-bold text-emerald-300 uppercase">Topic / Study Notes:</span>
+                  <p className="text-slate-200">{selectedStudyLog.topic}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-slate-800">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onDeleteStudyLog(selectedStudyLog.id);
+                  onCloseStudyLogModal();
+                }}
+                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 text-xs gap-1 font-semibold"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Study Entry
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCloseStudyLogModal}
+                className="bg-slate-900 border-slate-800 text-xs text-slate-300"
+              >
+                Close
               </Button>
             </div>
           </DialogContent>

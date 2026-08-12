@@ -1,5 +1,5 @@
 import React from 'react';
-import { Task, TimetableSlot } from '@/types/ripple';
+import { Task, TimetableSlot, StudyLog } from '@/types/ripple';
 import { getStatusTheme } from '@/utils/timeUtils';
 import { FilterType } from './CalendarHeader';
 
@@ -7,9 +7,10 @@ interface MonthViewGridProps {
   currentMonthDays: (Date | null)[];
   today: Date;
   filterType: FilterType;
-  getItemsForDate: (date: Date) => { dayTasks: Task[]; daySlots: TimetableSlot[] };
+  getItemsForDate: (date: Date) => { dayTasks: Task[]; daySlots: TimetableSlot[]; dayStudyLogs: StudyLog[] };
   onSelectTask: (task: Task) => void;
   onSelectSlot: (slot: TimetableSlot) => void;
+  onSelectStudyLog: (log: StudyLog) => void;
 }
 
 export const MonthViewGrid: React.FC<MonthViewGridProps> = ({
@@ -18,7 +19,8 @@ export const MonthViewGrid: React.FC<MonthViewGridProps> = ({
   filterType,
   getItemsForDate,
   onSelectTask,
-  onSelectSlot
+  onSelectSlot,
+  onSelectStudyLog
 }) => {
   const isSameDay = (d1: Date, d2: Date) =>
     d1.getFullYear() === d2.getFullYear() &&
@@ -45,7 +47,7 @@ export const MonthViewGrid: React.FC<MonthViewGridProps> = ({
             );
           }
 
-          const { dayTasks, daySlots } = getItemsForDate(date);
+          const { dayTasks, daySlots, dayStudyLogs } = getItemsForDate(date);
           const isTodayDay = isSameDay(date, today);
 
           return (
@@ -73,8 +75,29 @@ export const MonthViewGrid: React.FC<MonthViewGridProps> = ({
                   )}
                 </div>
 
+                {/* Logged Study Time Badges */}
+                {dayStudyLogs.length > 0 && (
+                  <div className="space-y-1 mb-1">
+                    {dayStudyLogs.slice(0, 2).map((log) => {
+                      const hrs = Math.floor(log.durationMinutes / 60);
+                      const mins = log.durationMinutes % 60;
+                      const durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+                      return (
+                        <div
+                          key={log.id}
+                          onClick={() => onSelectStudyLog(log)}
+                          className="p-1 rounded bg-emerald-950/80 border border-emerald-500/40 text-[10px] text-emerald-200 truncate cursor-pointer hover:bg-emerald-900/80 flex items-center justify-between"
+                        >
+                          <span className="font-bold truncate">⏱️ {log.subject}</span>
+                          <span className="font-mono text-[9px] text-emerald-300 ml-1 shrink-0">{durationStr}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Class Slots */}
-                {filterType !== 'tasks' && daySlots.length > 0 && (
+                {filterType !== 'tasks' && filterType !== 'study_logs' && daySlots.length > 0 && (
                   <div className="space-y-1 mb-1">
                     {daySlots.slice(0, 2).map((slot) => (
                       <div
@@ -89,7 +112,7 @@ export const MonthViewGrid: React.FC<MonthViewGridProps> = ({
                 )}
 
                 {/* Tasks */}
-                {filterType !== 'classes' && dayTasks.length > 0 && (
+                {filterType !== 'classes' && filterType !== 'study_logs' && dayTasks.length > 0 && (
                   <div className="space-y-1">
                     {dayTasks.slice(0, 2).map((task) => {
                       const theme = getStatusTheme(task.status);
@@ -102,7 +125,7 @@ export const MonthViewGrid: React.FC<MonthViewGridProps> = ({
                           <span className="font-bold">
                             {task.dueDate
                               ? new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                              : 'Self-Study'}
+                              : 'Goal'}
                           </span>{' '}
                           {task.title}
                         </div>
@@ -112,9 +135,9 @@ export const MonthViewGrid: React.FC<MonthViewGridProps> = ({
                 )}
               </div>
 
-              {(dayTasks.length > 2 || daySlots.length > 2) && (
+              {(dayTasks.length > 2 || daySlots.length > 2 || dayStudyLogs.length > 2) && (
                 <span className="text-[9px] font-mono text-slate-500 text-right mt-1">
-                  +{Math.max(0, dayTasks.length - 2) + Math.max(0, daySlots.length - 2)} more
+                  +{Math.max(0, dayTasks.length - 2) + Math.max(0, daySlots.length - 2) + Math.max(0, dayStudyLogs.length - 2)} more
                 </span>
               )}
             </div>

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export type ViewMode = 'month' | 'week' | 'day';
-export type FilterType = 'all' | 'exams' | 'assignments' | 'study_sessions' | 'classes';
+export type FilterType = 'all' | 'exams' | 'assignments' | 'study_sessions' | 'classes' | 'study_logs';
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -55,7 +55,7 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
               </Badge>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Exams, tests, assignments, study sessions, and weekly class schedule.
+              Exams, tests, assignments, study sessions, class schedule, and logged study hours.
             </p>
           </div>
         </div>
@@ -133,7 +133,8 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
           { id: 'all', label: 'All Activities' },
           { id: 'exams', label: '🏆 Exams & Tests' },
           { id: 'assignments', label: '📄 Assignments & Deadlines' },
-          { id: 'study_sessions', label: '📚 Study Sessions' },
+          { id: 'study_sessions', label: '📚 Study Goals' },
+          { id: 'study_logs', label: '⏱️ Logged Study Time' },
           { id: 'classes', label: '🎓 Classes & Timetable' }
         ].map((f) => (
           <button

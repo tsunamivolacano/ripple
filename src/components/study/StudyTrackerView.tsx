@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { 
   BookOpen, 
@@ -10,7 +10,11 @@ import {
   BarChart3, 
   CheckCircle2,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Play,
+  Pause,
+  Square,
+  RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +27,14 @@ export const StudyTrackerView: React.FC = () => {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [deletingSubject, setDeletingSubject] = useState<string | null>(null);
 
-  // Form states
+  // Live Stopwatch States inside Study Tracker
+  const [isLiveStopwatchRunning, setIsLiveStopwatchRunning] = useState(false);
+  const [stopwatchSubject, setStopwatchSubject] = useState<string>('Physics');
+  const [stopwatchTopic, setStopwatchTopic] = useState<string>('');
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const stopwatchStartTimeRef = useRef<number | null>(null);
+
+  // Form states for manual log
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [customSubject, setCustomSubject] = useState<string>('');
   const [durationHours, setDurationHours] = useState<number>(1);
@@ -45,6 +56,66 @@ export const StudyTrackerView: React.FC = () => {
       'General Self-Study'
     ])
   );
+
+  // Live Stopwatch Ticker
+  useEffect(() => {
+    let interval: any = null;
+    if (isLiveStopwatchRunning && stopwatchStartTimeRef.current) {
+      const updateTimer = () => {
+        const now = Date.now();
+        const diffMs = now - stopwatchStartTimeRef.current!;
+        setElapsedSeconds(Math.max(0, Math.floor(diffMs / 1000)));
+      };
+
+      updateTimer();
+      interval = setInterval(updateTimer, 500);
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible' && isLiveStopwatchRunning) {
+          updateTimer();
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
+  }, [isLiveStopwatchRunning]);
+
+  const toggleLiveStopwatch = () => {
+    if (isLiveStopwatchRunning) {
+      setIsLiveStopwatchRunning(false);
+    } else {
+      const now = Date.now();
+      stopwatchStartTimeRef.current = now - elapsedSeconds * 1000;
+      setIsLiveStopwatchRunning(true);
+    }
+  };
+
+  const handleStopAndSaveLiveSession = () => {
+    setIsLiveStopwatchRunning(false);
+    const mins = Math.round(elapsedSeconds / 60);
+    if (mins > 0) {
+      addStudyLog({
+        subject: stopwatchSubject || 'General Self-Study',
+        durationMinutes: mins,
+        topic: stopwatchTopic.trim() || undefined,
+        source: 'timer'
+      });
+    }
+    setElapsedSeconds(0);
+    setStopwatchTopic('');
+    stopwatchStartTimeRef.current = null;
+  };
+
+  const handleResetLiveStopwatch = () => {
+    setIsLiveStopwatchRunning(false);
+    setElapsedSeconds(0);
+    stopwatchStartTimeRef.current = null;
+  };
 
   const handleSubmitManualLog = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +158,11 @@ export const StudyTrackerView: React.FC = () => {
 
   const sortedSubjectBreakdown = Object.entries(subjectTotals).sort((a, b) => b[1] - a[1]);
 
+  // Stopwatch formatted time
+  const stopMins = Math.floor(elapsedSeconds / 60);
+  const stopSecs = elapsedSeconds % 60;
+  const formattedStopwatchTime = `${String(stopMins).padStart(2, '0')}:${String(stopSecs).padStart(2, '0')}`;
+
   return (
     <div data-tour="study-section" className="space-y-6">
       {/* Overview Banner */}
@@ -99,10 +175,10 @@ export const StudyTrackerView: React.FC = () => {
             </Badge>
           </div>
           <h2 className="text-xl font-extrabold text-white">
-            Subject-Wise Study Log
+            Subject-Wise Study Log & Live Tracker
           </h2>
           <p className="text-xs text-slate-400 max-w-lg">
-            Track actual time spent reading, practicing, and revising subjects. You can delete or manage any logged session at any time.
+            Start a live open-ended study timer or manually log completed study hours. All sessions sync directly to your live Calendar.
           </p>
         </div>
 
@@ -121,8 +197,85 @@ export const StudyTrackerView: React.FC = () => {
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold gap-1.5 shadow-lg shadow-indigo-950"
           >
             <Plus className="w-4 h-4" />
-            Log Study Hours
+            Manual Log
           </Button>
+        </div>
+      </div>
+
+      {/* Live Study Stopwatch Widget */}
+      <div className="p-5 rounded-2xl bg-slate-900/90 border border-emerald-500/40 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-white">Live Open-Ended Study Timer</h3>
+              <p className="text-xs text-slate-400">Track real study hours live — click stop whenever you finish!</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Select value={stopwatchSubject} onValueChange={setStopwatchSubject} disabled={isLiveStopwatchRunning}>
+              <SelectTrigger className="w-40 bg-slate-950 border-slate-800 text-xs text-white h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 text-xs">
+                {availableSubjects.map((sub) => (
+                  <SelectItem key={sub} value={sub}>{sub}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Input
+              placeholder="Topic (e.g. Chapter 4 Integration)"
+              value={stopwatchTopic}
+              onChange={(e) => setStopwatchTopic(e.target.value)}
+              className="bg-slate-950 border-slate-800 text-xs text-white h-9 min-w-[160px]"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-4">
+            <span className="font-mono text-4xl font-extrabold text-emerald-400 tracking-wider">
+              {formattedStopwatchTime}
+            </span>
+            <span className="text-xs text-slate-400 font-mono">
+              {isLiveStopwatchRunning ? '⚡ Tracking Live Study Hours...' : 'Ready to start live session'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={toggleLiveStopwatch}
+              className={`${
+                isLiveStopwatchRunning ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              } text-white font-bold text-xs gap-1.5 h-9 px-5`}
+            >
+              {isLiveStopwatchRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
+              {isLiveStopwatchRunning ? 'Pause' : 'Start Live Timer'}
+            </Button>
+
+            {elapsedSeconds > 0 && (
+              <Button
+                onClick={handleStopAndSaveLiveSession}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1.5 h-9"
+              >
+                <Square className="w-3.5 h-3.5 fill-white" />
+                Stop & Save Log
+              </Button>
+            )}
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleResetLiveStopwatch}
+              className="border-slate-800 bg-slate-900 text-slate-400 hover:text-white h-9 w-9"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 

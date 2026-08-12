@@ -1,7 +1,7 @@
 import React from 'react';
-import { Task, TimetableSlot } from '@/types/ripple';
+import { Task, TimetableSlot, StudyLog } from '@/types/ripple';
 import { getStatusTheme, getTimeRemaining } from '@/utils/timeUtils';
-import { Clock, GraduationCap, Zap } from 'lucide-react';
+import { Clock, GraduationCap, Zap, BookOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FilterType } from './CalendarHeader';
@@ -12,9 +12,10 @@ interface DayViewGridProps {
   userTimeZone: string;
   hours: number[];
   filterType: FilterType;
-  getItemsForDate: (date: Date) => { dayTasks: Task[]; daySlots: TimetableSlot[] };
+  getItemsForDate: (date: Date) => { dayTasks: Task[]; daySlots: TimetableSlot[]; dayStudyLogs: StudyLog[] };
   onSelectTask: (task: Task) => void;
   onSelectSlot: (slot: TimetableSlot) => void;
+  onSelectStudyLog: (log: StudyLog) => void;
   onOpenPrediction: (task: Task) => void;
 }
 
@@ -27,6 +28,7 @@ export const DayViewGrid: React.FC<DayViewGridProps> = ({
   getItemsForDate,
   onSelectTask,
   onSelectSlot,
+  onSelectStudyLog,
   onOpenPrediction
 }) => {
   const isSameDay = (d1: Date, d2: Date) =>
@@ -59,8 +61,9 @@ export const DayViewGrid: React.FC<DayViewGridProps> = ({
       <div className="space-y-3">
         {hours.map((hour) => {
           const formattedHour = `${String(hour).padStart(2, '0')}:00`;
-          const { dayTasks, daySlots } = getItemsForDate(currentDate);
+          const { dayTasks, daySlots, dayStudyLogs } = getItemsForDate(currentDate);
 
+          const hourLogs = dayStudyLogs.filter((l) => new Date(l.loggedAt).getHours() === hour);
           const hourSlots = daySlots.filter((s) => parseInt(s.startTime.split(':')[0], 10) === hour);
           const hourTasks = dayTasks.filter((t) => t.dueDate && new Date(t.dueDate).getHours() === hour);
 
@@ -80,11 +83,44 @@ export const DayViewGrid: React.FC<DayViewGridProps> = ({
               </div>
 
               <div className="flex-1 space-y-2">
-                {hourSlots.length === 0 && hourTasks.length === 0 ? (
+                {hourSlots.length === 0 && hourTasks.length === 0 && hourLogs.length === 0 ? (
                   <span className="text-[11px] text-slate-600 italic">No scheduled activities</span>
                 ) : (
                   <>
+                    {/* Logged Study Sessions */}
+                    {filterType !== 'classes' &&
+                      hourLogs.map((l) => {
+                        const hrs = Math.floor(l.durationMinutes / 60);
+                        const mins = l.durationMinutes % 60;
+                        const durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+                        return (
+                          <div
+                            key={l.id}
+                            onClick={() => onSelectStudyLog(l)}
+                            className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between cursor-pointer hover:bg-emerald-900/40"
+                          >
+                            <div className="flex items-center gap-2">
+                              <BookOpen className="w-4 h-4 text-emerald-400" />
+                              <div>
+                                <h4 className="text-xs font-bold text-emerald-200">
+                                  Logged Study: {l.subject}
+                                </h4>
+                                {l.topic && (
+                                  <span className="text-[10px] text-slate-300 italic block">
+                                    "{l.topic}"
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-mono text-xs">
+                              +{durationStr}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+
                     {filterType !== 'tasks' &&
+                      filterType !== 'study_logs' &&
                       hourSlots.map((s) => (
                         <div
                           key={s.id}
@@ -107,6 +143,7 @@ export const DayViewGrid: React.FC<DayViewGridProps> = ({
                       ))}
 
                     {filterType !== 'classes' &&
+                      filterType !== 'study_logs' &&
                       hourTasks.map((t) => {
                         const theme = getStatusTheme(t.status);
                         const timeInfo = getTimeRemaining(t.dueDate);
