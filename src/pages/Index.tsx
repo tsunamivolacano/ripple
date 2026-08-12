@@ -18,7 +18,7 @@ import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Task } from '@/types/ripple';
-import { Shield, Eye, LogOut } from 'lucide-react';
+import { Eye, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const RippleAppContent: React.FC = () => {
@@ -48,7 +48,6 @@ const RippleAppContent: React.FC = () => {
     return <AuthPage />;
   }
 
-  // Render Admin Dashboard if Admin View active
   if (isAdmin && isAdminView) {
     return (
       <AdminLayout
@@ -60,7 +59,6 @@ const RippleAppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white relative">
-      {/* Sticky Support Mode / Impersonation Banner */}
       {impersonatedUser && (
         <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 border-b border-purple-500/50 px-4 py-2 text-white flex items-center justify-between text-xs sticky top-0 z-50 shadow-xl">
           <div className="flex items-center gap-2">
@@ -82,14 +80,12 @@ const RippleAppContent: React.FC = () => {
         </div>
       )}
 
-      {/* Top Navbar Header */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
       />
 
-      {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 pb-24">
         {activeTab === 'warroom' && (
           <WarRoom
@@ -116,19 +112,15 @@ const RippleAppContent: React.FC = () => {
         {activeTab === 'debt' && <DebtLedgerView />}
       </main>
 
-      {/* Interactive AI Assistant Chatbot */}
       <RippleAssistantChatbot />
 
-      {/* Single Detailed Step-by-Step Tutorial Overlay */}
       <TutorialOverlay onTabChange={(tab) => setActiveTab(tab)} />
 
-      {/* Notification Settings Modal */}
       <NotificationSettingsModal
         isOpen={isNotificationModalOpen}
         onClose={() => setNotificationModalOpen(false)}
       />
 
-      {/* Modals & Overlays */}
       <PredictionView
         task={activeTaskForPrediction}
         onClose={() => setActiveTaskForPrediction(null)}

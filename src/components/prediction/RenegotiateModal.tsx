@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { Task } from '@/types/ripple';
 import { useRipple } from '@/context/RippleContext';
-import { Handshake, AlertTriangle, Calendar, Clock } from 'lucide-react';
+import { Handshake, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface RenegotiateModalProps {

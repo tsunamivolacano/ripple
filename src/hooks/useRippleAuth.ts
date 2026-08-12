@@ -1,55 +1,53 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { safeGetStorage, safeSetStorage, getLocalUserId } from '@/utils/storageUtils';
-import { PERSONAS_MAP } from '@/data/ripplePersonaData';
-import { registerUserInRegistry, syncUserProfileToSupabase } from '@/services/adminService';
-import { showSuccess } from '@/utils/toast';
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { safeSetStorage, safeGetStorage } from "@/utils/storageUtils";
+import { PERSONAS_MAP } from "@/data/ripplePersonaData";
+import { registerUserInRegistry, syncUserProfileToSupabase } from "@/services/adminService";
+import { showSuccess } from "@/utils/toast";
 
 export interface UserAccount {
   id: string;
   email: string;
   isDemo?: boolean;
   demoPersonaId?: string;
-  isLocalSession?: boolean;
 }
 
 export interface AuthResponse {
   success: boolean;
   error?: string;
+  requiresEmailConfirmation?: boolean;
 }
 
 export function useRippleAuth() {
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() =>
-    safeGetStorage<UserAccount | null>('ripple_active_user', null)
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(
+    () => safeGetStorage<UserAccount | null>("ripple_active_user", null)
   );
+
+  const applySession = (session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"] | null) => {
+    if (session?.user) {
+      const acc: UserAccount = {
+        id: session.user.id,
+        email: session.user.email || "",
+        isDemo: false
+      };
+      setCurrentUser(acc);
+      safeSetStorage("ripple_active_user", acc);
+      registerUserInRegistry({ id: acc.id, email: acc.email });
+      syncUserProfileToSupabase(acc.id, acc.email);
+    } else if (!currentUser?.isDemo) {
+      // No active Supabase session (and we're not mid-demo) → signed out
+      localStorage.removeItem("ripple_active_user");
+      setCurrentUser(null);
+    }
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user && !currentUser?.isLocalSession) {
-        const acc: UserAccount = {
-          id: session.user.id,
-          email: session.user.email || '',
-          isDemo: false
-        };
-        setCurrentUser(acc);
-        safeSetStorage('ripple_active_user', acc);
-        registerUserInRegistry({ id: acc.id, email: acc.email });
-        syncUserProfileToSupabase(acc.id, acc.email);
-      }
+      applySession(session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user && !currentUser?.isLocalSession) {
-        const acc: UserAccount = {
-          id: session.user.id,
-          email: session.user.email || '',
-          isDemo: false
-        };
-        setCurrentUser(acc);
-        safeSetStorage('ripple_active_user', acc);
-        registerUserInRegistry({ id: acc.id, email: acc.email });
-        syncUserProfileToSupabase(acc.id, acc.email);
-      }
+      applySession(session);
     });
 
     return () => subscription.unsubscribe();
@@ -58,93 +56,81 @@ export function useRippleAuth() {
   const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
-      return { success: false, error: 'Please enter both email and password.' };
+      return { success: false, error: "Please enter both email and password." };
     }
 
     try {
-      const { data } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password
       });
 
-      if (data?.user) {
-        const acc: UserAccount = {
-          id: data.user.id,
-          email: data.user.email || cleanEmail,
-          isDemo: false
-        };
-        setCurrentUser(acc);
-        safeSetStorage('ripple_active_user', acc);
-        registerUserInRegistry({ id: acc.id, email: acc.email });
-        syncUserProfileToSupabase(acc.id, acc.email);
-        showSuccess(`Signed in as ${cleanEmail}`);
-        return { success: true };
+      if (error || !data.user) {
+        return { success: false, error: error?.message || "Invalid email or password." };
       }
-    } catch (e) {
-      console.warn('Auth exception, fallback to local session:', e);
-    }
 
-    const localId = getLocalUserId(cleanEmail);
-    const localAcc: UserAccount = {
-      id: localId,
-      email: cleanEmail,
-      isDemo: false,
-      isLocalSession: true
-    };
-    setCurrentUser(localAcc);
-    safeSetStorage('ripple_active_user', localAcc);
-    registerUserInRegistry({ id: localAcc.id, email: localAcc.email });
-    syncUserProfileToSupabase(localAcc.id, localAcc.email);
-    showSuccess(`Signed in as ${cleanEmail}`);
-    return { success: true };
+      const acc: UserAccount = {
+        id: data.user.id,
+        email: data.user.email || cleanEmail,
+        isDemo: false
+      };
+      setCurrentUser(acc);
+      safeSetStorage("ripple_active_user", acc);
+      showSuccess(`Signed in as ${cleanEmail}`);
+      return { success: true };
+    } catch (e) {
+      console.error("Sign-in failed:", e);
+      return { success: false, error: "Unable to reach authentication service. Check your connection and try again." };
+    }
   };
 
   const signUpWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
-      return { success: false, error: 'Please enter both email and password.' };
+      return { success: false, error: "Please enter both email and password." };
     }
 
     try {
-      const { data } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password: password
       });
 
-      if (data?.user) {
-        const acc: UserAccount = {
-          id: data.user.id,
-          email: data.user.email || cleanEmail,
-          isDemo: false
-        };
-        setCurrentUser(acc);
-        safeSetStorage('ripple_active_user', acc);
-        registerUserInRegistry({ id: acc.id, email: acc.email });
-        syncUserProfileToSupabase(acc.id, acc.email);
-        showSuccess(`Account created & signed in!`);
-        return { success: true };
+      if (error) {
+        return { success: false, error: error.message };
       }
-    } catch (e) {
-      console.warn('Signup exception, fallback to local session:', e);
-    }
 
-    const localId = getLocalUserId(cleanEmail);
-    const localAcc: UserAccount = {
-      id: localId,
-      email: cleanEmail,
-      isDemo: false,
-      isLocalSession: true
-    };
-    setCurrentUser(localAcc);
-    safeSetStorage('ripple_active_user', localAcc);
-    registerUserInRegistry({ id: localAcc.id, email: localAcc.email });
-    syncUserProfileToSupabase(localAcc.id, localAcc.email);
-    showSuccess(`Account created & signed in!`);
-    return { success: true };
+      if (!data.user) {
+        return { success: false, error: "Registration failed. Please try again." };
+      }
+
+      const acc: UserAccount = {
+        id: data.user.id,
+        email: data.user.email || cleanEmail,
+        isDemo: false
+      };
+
+      // If no session is returned, email confirmation is required.
+      if (!data.session) {
+        return {
+          success: true,
+          requiresEmailConfirmation: true,
+          error: "Account created. Please confirm your email before signing in."
+        };
+      }
+
+      setCurrentUser(acc);
+      safeSetStorage("ripple_active_user", acc);
+      showSuccess(`Account created & signed in!`);
+      return { success: true };
+    } catch (e) {
+      console.error("Sign-up failed:", e);
+      return { success: false, error: "Unable to reach authentication service. Check your connection and try again." };
+    }
   };
 
   const loginDemoAccount = (personaId: string) => {
-    const persona = PERSONAS_MAP[personaId] || PERSONAS_MAP['riya'];
+    const persona = PERSONAS_MAP[personaId] || PERSONAS_MAP["riya"];
     const account: UserAccount = {
       id: `demo_${persona.id}`,
       email: `${persona.id}@demo.ripple`,
@@ -152,22 +138,22 @@ export function useRippleAuth() {
       demoPersonaId: persona.id
     };
     setCurrentUser(account);
-    safeSetStorage('ripple_active_user', account);
+    safeSetStorage("ripple_active_user", account);
     showSuccess(`Viewing Demo Persona: ${persona.name}`);
   };
 
   const logout = async () => {
     try {
-      if (currentUser && !currentUser.isDemo && !currentUser.isLocalSession) {
+      if (currentUser && !currentUser.isDemo) {
         await supabase.auth.signOut();
       }
     } catch (e) {
-      console.error('Error signing out:', e);
+      console.error("Error signing out:", e);
     } finally {
-      localStorage.removeItem('ripple_active_user');
-      sessionStorage.removeItem('ripple_active_user');
+      localStorage.removeItem("ripple_active_user");
+      sessionStorage.removeItem("ripple_active_user");
       setCurrentUser(null);
-      showSuccess('Signed out successfully.');
+      showSuccess("Signed out successfully.");
     }
   };
 

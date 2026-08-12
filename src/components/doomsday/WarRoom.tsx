@@ -2,18 +2,7 @@ import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { TaskCard } from './TaskCard';
 import { Task } from '@/types/ripple';
-import { 
-  AlertTriangle, 
-  Clock, 
-  Filter, 
-  Flame, 
-  Plus, 
-  Sparkles, 
-  ShieldAlert,
-  Search,
-  GraduationCap,
-  User
-} from 'lucide-react';
+import { Clock, Flame, Plus, ShieldAlert, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -34,11 +23,9 @@ export const WarRoom: React.FC<WarRoomProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'academic' | 'personal'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter tasks
   const activeTasks = tasks.filter((t) => {
     if (t.status === 'completed') return false;
-    
-    // Category check
+
     const isPersonal = t.category === 'personal' || !t.slotId || ['personal', 'meeting', 'appointment', 'reminder', 'event', 'chore'].includes(t.taskType);
     if (categoryFilter === 'academic' && isPersonal) return false;
     if (categoryFilter === 'personal' && !isPersonal) return false;
@@ -48,12 +35,10 @@ export const WarRoom: React.FC<WarRoomProps> = ({
     return t.status === filterStatus && matchesSearch;
   });
 
-  // Critical tasks needing immediate action
   const criticalCount = tasks.filter((t) => t.status === 'critical' || t.status === 'too_late').length;
 
   return (
     <div className="space-y-6">
-      {/* Top Banner Alert if Critical Tasks exist */}
       {criticalCount > 0 && (
         <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/80 via-rose-900/40 to-slate-900 border border-rose-500/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
           <div className="flex items-center gap-3">
@@ -87,7 +72,6 @@ export const WarRoom: React.FC<WarRoomProps> = ({
         </div>
       )}
 
-      {/* Control Toolbar */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -99,7 +83,6 @@ export const WarRoom: React.FC<WarRoomProps> = ({
           />
         </div>
 
-        {/* Category Filters */}
         <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
           {[
             { id: 'all', label: 'All Activities' },
@@ -120,7 +103,6 @@ export const WarRoom: React.FC<WarRoomProps> = ({
           ))}
         </div>
 
-        {/* Status Filter Buttons */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {[
             { id: 'all', label: 'All Status' },
@@ -144,7 +126,6 @@ export const WarRoom: React.FC<WarRoomProps> = ({
         </div>
       </div>
 
-      {/* Task Grid */}
       {activeTasks.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {activeTasks.map((task) => {

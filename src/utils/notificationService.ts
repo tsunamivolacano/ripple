@@ -1,4 +1,4 @@
-import { Task, TimetableSlot, ReminderTiming, ScheduledNotification, NotificationSettings } from '@/types/ripple';
+import { Task, TimetableSlot, ReminderTiming, NotificationSettings } from '@/types/ripple';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 
@@ -34,7 +34,6 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   try {
     const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     swRegistration = reg;
-    console.log('[RIPPLE SW] Service Worker registered successfully:', reg.scope);
     return reg;
   } catch (err) {
     console.error('[RIPPLE SW] Service Worker registration failed:', err);
@@ -117,49 +116,50 @@ export async function scheduleTaskNotifications(
   await cancelItemNotifications(userId, task.id);
 
   const nowMs = Date.now();
-  const dueMs = new Date(task.dueDate).getTime();
 
-  for (const reminderOpt of reminders) {
-    const triggerISO = calculateTriggerTime(task.dueDate, reminderOpt);
-    const triggerMs = new Date(triggerISO).getTime();
+  try {
+    for (const reminderOpt of reminders) {
+      const triggerISO = calculateTriggerTime(task.dueDate, reminderOpt);
+      const triggerMs = new Date(triggerISO).getTime();
 
-    // Only schedule future notifications
-    if (triggerMs > nowMs) {
-      const labelText = reminderOpt === 'exact'
-        ? 'DEADLINE NOW'
-        : reminderOpt === 'overdue'
-        ? 'TASK OVERDUE'
-        : `${reminderOpt} REMINDER`;
+      if (triggerMs > nowMs) {
+        const labelText = reminderOpt === 'exact'
+          ? 'DEADLINE NOW'
+          : reminderOpt === 'overdue'
+          ? 'TASK OVERDUE'
+          : `${reminderOpt} REMINDER`;
 
-      const bodyText = `Task "${task.title}" is due at ${formatLocalTime(task.dueDate)}. Don't let the Doomsday Dial tick out!`;
+        const bodyText = `Task "${task.title}" is due at ${formatLocalTime(task.dueDate)}. Don't let the Doomsday Dial tick out!`;
 
-      // Save to Supabase queue
+        await supabase.from('scheduled_notifications').insert({
+          user_id: userId,
+          item_id: task.id,
+          item_type: 'task',
+          title: `⏰ RIPPLE Alert [${labelText}]`,
+          body: bodyText,
+          trigger_time: triggerISO,
+          reminder_offset: reminderOpt,
+          status: 'pending'
+        });
+      }
+    }
+
+    // Also schedule an overdue alert if task is still pending past deadline
+    const overdueISO = calculateTriggerTime(task.dueDate, 'overdue');
+    if (new Date(overdueISO).getTime() > nowMs) {
       await supabase.from('scheduled_notifications').insert({
         user_id: userId,
         item_id: task.id,
-        item_type: 'task',
-        title: `⏰ RIPPLE Alert [${labelText}]`,
-        body: bodyText,
-        trigger_time: triggerISO,
-        reminder_offset: reminderOpt,
+        item_type: 'overdue',
+        title: `🔥 RIPPLE OVERDUE WARNING`,
+        body: `Task "${task.title}" has passed its deadline! Inspect consequences in your War Room.`,
+        trigger_time: overdueISO,
+        reminder_offset: 'overdue',
         status: 'pending'
       });
     }
-  }
-
-  // Also schedule an overdue alert if task is still pending past deadline
-  const overdueISO = calculateTriggerTime(task.dueDate, 'overdue');
-  if (new Date(overdueISO).getTime() > nowMs) {
-    await supabase.from('scheduled_notifications').insert({
-      user_id: userId,
-      item_id: task.id,
-      item_type: 'overdue',
-      title: `🔥 RIPPLE OVERDUE WARNING`,
-      body: `Task "${task.title}" has passed its deadline! Inspect consequences in your War Room.`,
-      trigger_time: overdueISO,
-      reminder_offset: 'overdue',
-      status: 'pending'
-    });
+  } catch (err) {
+    console.warn('[RIPPLE Notifications] Scheduling task reminders failed gracefully:', err);
   }
 }
 
@@ -180,24 +180,28 @@ export async function scheduleClassNotifications(
 
   const nowMs = Date.now();
 
-  for (const reminderOpt of reminders) {
-    const triggerISO = calculateTriggerTime(nextClassISO, reminderOpt);
-    const triggerMs = new Date(triggerISO).getTime();
+  try {
+    for (const reminderOpt of reminders) {
+      const triggerISO = calculateTriggerTime(nextClassISO, reminderOpt);
+      const triggerMs = new Date(triggerISO).getTime();
 
-    if (triggerMs > nowMs) {
-      const bodyText = `${slot.subject} with ${slot.teacherName} starts at ${slot.startTime} (${slot.room}). Teacher tag: ${slot.strictnessTag.replace('_', ' ')}.`;
+      if (triggerMs > nowMs) {
+        const bodyText = `${slot.subject} with ${slot.teacherName} starts at ${slot.startTime} (${slot.room}). Teacher tag: ${slot.strictnessTag.replace('_', ' ')}.`;
 
-      await supabase.from('scheduled_notifications').insert({
-        user_id: userId,
-        item_id: slot.id,
-        item_type: 'class',
-        title: `🎓 RIPPLE Class Alert: ${slot.subject}`,
-        body: bodyText,
-        trigger_time: triggerISO,
-        reminder_offset: reminderOpt,
-        status: 'pending'
-      });
+        await supabase.from('scheduled_notifications').insert({
+          user_id: userId,
+          item_id: slot.id,
+          item_type: 'class',
+          title: `🎓 RIPPLE Class Alert: ${slot.subject}`,
+          body: bodyText,
+          trigger_time: triggerISO,
+          reminder_offset: reminderOpt,
+          status: 'pending'
+        });
+      }
     }
+  } catch (err) {
+    console.warn('[RIPPLE Notifications] Scheduling class reminders failed gracefully:', err);
   }
 }
 
@@ -242,7 +246,7 @@ export function getNextSlotDateISO(dayOfWeekStr: string, timeStr: string): strin
 
   const now = new Date();
   const currentDayIndex = now.getDay();
-  
+
   let daysUntil = targetDayIndex - currentDayIndex;
   if (daysUntil < 0) {
     daysUntil += 7;

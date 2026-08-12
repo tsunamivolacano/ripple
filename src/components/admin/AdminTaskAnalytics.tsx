@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppOverviewMetrics } from '@/types/admin';
-import { CheckCircle2, AlertTriangle, TrendingUp, Sparkles } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface AdminTaskAnalyticsProps {
@@ -8,7 +8,10 @@ interface AdminTaskAnalyticsProps {
 }
 
 export const AdminTaskAnalytics: React.FC<AdminTaskAnalyticsProps> = ({ metrics }) => {
-  const rate = Math.round((metrics.completedTasks / metrics.totalTasksCreated) * 100);
+  const rate =
+    metrics.totalTasksCreated > 0
+      ? Math.round((metrics.completedTasks / metrics.totalTasksCreated) * 100)
+      : 0;
 
   return (
     <div className="space-y-6">

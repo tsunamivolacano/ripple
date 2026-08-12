@@ -1,30 +1,32 @@
-import React, { useState } from 'react';
-import { useRipple } from '@/context/RippleContext';
-import { ALL_PERSONAS } from '@/data/ripplePersonaData';
-import { Zap, Mail, Lock, ArrowRight, UserPlus, LogIn, AlertCircle, ShieldCheck } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import React, { useState } from "react";
+import { useRipple } from "@/context/RippleContext";
+import { ALL_PERSONAS } from "@/data/ripplePersonaData";
+import { Zap, Mail, Lock, ArrowRight, UserPlus, LogIn, AlertCircle, ShieldCheck, MailCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const AuthPage: React.FC = () => {
   const { loginWithEmail, signUpWithEmail, loginDemoAccount } = useRipple();
 
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  
-  const [signUpEmail, setSignUpEmail] = useState('');
-  const [signUpPassword, setSignUpPassword] = useState('');
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
+  const [signUpEmail, setSignUpEmail] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState("");
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setInfoMessage(null);
     if (!loginEmail.trim() || !loginPassword.trim()) {
-      setErrorMessage('Please provide both email and password.');
+      setErrorMessage("Please provide both email and password.");
       return;
     }
 
@@ -33,20 +35,21 @@ export const AuthPage: React.FC = () => {
     setIsLoading(false);
 
     if (!result.success) {
-      setErrorMessage(result.error || 'Authentication failed. Please check your credentials.');
+      setErrorMessage(result.error || "Authentication failed. Please check your credentials.");
     }
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setInfoMessage(null);
     if (!signUpEmail.trim() || !signUpPassword.trim()) {
-      setErrorMessage('Please fill in all fields.');
+      setErrorMessage("Please fill in all fields.");
       return;
     }
 
     if (signUpPassword.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long.');
+      setErrorMessage("Password must be at least 6 characters long.");
       return;
     }
 
@@ -55,18 +58,18 @@ export const AuthPage: React.FC = () => {
     setIsLoading(false);
 
     if (!result.success) {
-      setErrorMessage(result.error || 'Registration failed. Please try again.');
+      setErrorMessage(result.error || "Registration failed. Please try again.");
+    } else if (result.requiresEmailConfirmation) {
+      setInfoMessage(result.error);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden font-sans">
-      {/* Background ambient lighting */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-rose-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="max-w-md w-full space-y-6 z-10">
-        {/* Header Branding */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-rose-600 via-purple-600 to-indigo-500 shadow-xl shadow-rose-900/30 mb-2">
             <Zap className="w-8 h-8 text-white fill-white" />
@@ -79,9 +82,8 @@ export const AuthPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Auth Box */}
         <Card className="bg-slate-900/90 border-slate-800 text-white shadow-2xl rounded-2xl backdrop-blur-md">
-          <Tabs defaultValue="login" className="w-full" onValueChange={() => setErrorMessage(null)}>
+          <Tabs defaultValue="login" className="w-full" onValueChange={() => { setErrorMessage(null); setInfoMessage(null); }}>
             <CardHeader className="pb-3 border-b border-slate-800/80">
               <TabsList className="grid grid-cols-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 <TabsTrigger value="login" className="text-xs font-semibold data-[state=active]:bg-rose-600 data-[state=active]:text-white rounded-lg">
@@ -103,7 +105,13 @@ export const AuthPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Login Tab */}
+              {infoMessage && (
+                <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/50 flex items-center gap-2 text-emerald-300 text-xs">
+                  <MailCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{infoMessage}</span>
+                </div>
+              )}
+
               <TabsContent value="login" className="m-0 space-y-4">
                 <form onSubmit={handleLogin} className="space-y-3">
                   <div className="space-y-1">
@@ -141,13 +149,12 @@ export const AuthPage: React.FC = () => {
                     disabled={isLoading}
                     className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-lg shadow-rose-950"
                   >
-                    {isLoading ? 'Authenticating...' : 'Sign In'}
+                    {isLoading ? "Authenticating..." : "Sign In"}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
               </TabsContent>
 
-              {/* Sign Up Tab */}
               <TabsContent value="signup" className="m-0 space-y-4">
                 <form onSubmit={handleSignUp} className="space-y-3">
                   <div className="space-y-1">
@@ -185,13 +192,12 @@ export const AuthPage: React.FC = () => {
                     disabled={isLoading}
                     className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-lg shadow-rose-950"
                   >
-                    {isLoading ? 'Creating Account...' : 'Create Account'}
+                    {isLoading ? "Creating Account..." : "Create Account"}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
               </TabsContent>
 
-              {/* Separator */}
               <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-slate-800" />
@@ -203,7 +209,6 @@ export const AuthPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Demo Accounts List */}
               <div className="space-y-2.5">
                 {ALL_PERSONAS.map((persona) => (
                   <button
@@ -225,9 +230,7 @@ export const AuthPage: React.FC = () => {
                             Demo
                           </Badge>
                         </div>
-                        <p className="text-[10px] text-slate-400">
-                          {persona.role}
-                        </p>
+                        <p className="text-[10px] text-slate-400">{persona.role}</p>
                       </div>
                     </div>
 
@@ -236,10 +239,9 @@ export const AuthPage: React.FC = () => {
                 ))}
               </div>
             </CardContent>
-          </Tabs>
+          </Card>
         </Card>
 
-        {/* Privacy Note */}
         <p className="text-[11px] text-center text-slate-500 flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
           Secured with Supabase Auth session tokens & Row-Level Security.

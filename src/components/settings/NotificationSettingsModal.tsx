@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { ReminderTiming } from '@/types/ripple';
 import { REMINDER_LABEL_MAP, requestNotificationPermission, sendTestNotification, getNotificationPermissionState } from '@/utils/notificationService';
-import { Bell, ShieldCheck, CheckCircle2, AlertTriangle, Send, Clock, Volume2 } from 'lucide-react';
+import { Bell, ShieldCheck, Send } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -64,7 +64,6 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
           </div>
         </DialogHeader>
 
-        {/* Permission Status Box */}
         <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2 my-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -107,9 +106,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
           )}
         </div>
 
-        {/* Settings Form */}
         <div className="space-y-4 my-2 text-xs">
-          {/* Enable / Disable Task Reminders */}
           <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -148,7 +145,6 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
             )}
           </div>
 
-          {/* Enable / Disable Class Reminders */}
           <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -188,7 +184,6 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
           </div>
         </div>
 
-        {/* Footer Actions */}
         <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-800">
           <Button
             variant="outline"

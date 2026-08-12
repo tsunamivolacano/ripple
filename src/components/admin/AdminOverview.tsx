@@ -1,19 +1,17 @@
 import React from 'react';
-import { 
-  AppOverviewMetrics, 
-  SubjectStudyBreakdown, 
-  UserActivityTrend 
+import {
+  AppOverviewMetrics,
+  SubjectStudyBreakdown,
+  UserActivityTrend
 } from '@/types/admin';
-import { 
-  Users, 
-  CheckCircle2, 
-  Clock, 
-  CalendarDays, 
-  TrendingUp, 
-  Sparkles, 
-  BarChart2, 
-  Zap,
+import {
+  Users,
+  CheckCircle2,
   BookOpen,
+  CalendarDays,
+  TrendingUp,
+  Zap,
+  BarChart2,
   UserCheck
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,10 +24,7 @@ import {
   YAxis,
   Tooltip,
   AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell
+  Area
 } from 'recharts';
 
 interface AdminOverviewProps {
@@ -38,18 +33,19 @@ interface AdminOverviewProps {
   userActivityTrend: UserActivityTrend[];
 }
 
-const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe'];
-
 export const AdminOverview: React.FC<AdminOverviewProps> = ({
   metrics,
   subjectBreakdown,
   userActivityTrend
 }) => {
   const totalHours = (metrics.totalStudyMinutesLogged / 60).toFixed(1);
+  const completionRate =
+    metrics.totalTasksCreated > 0
+      ? Math.round((metrics.completedTasks / metrics.totalTasksCreated) * 100)
+      : 0;
 
   return (
     <div className="space-y-6">
-      {/* Top Header Banner */}
       <div className="p-6 rounded-3xl bg-gradient-to-r from-purple-950/80 via-slate-900 to-indigo-950 border border-purple-500/30 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -74,7 +70,6 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
         </div>
       </div>
 
-      {/* Primary KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-slate-900/80 border-slate-800 text-white rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -105,7 +100,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
           <CardContent>
             <div className="text-2xl font-extrabold font-mono text-emerald-300">{metrics.completedTasks} / {metrics.totalTasksCreated}</div>
             <p className="text-[11px] text-slate-400 mt-1">
-              {Math.round((metrics.completedTasks / metrics.totalTasksCreated) * 100)}% overall completion rate
+              {completionRate}% overall completion rate
             </p>
           </CardContent>
         </Card>
@@ -145,9 +140,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
         </Card>
       </div>
 
-      {/* Analytics Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Weekly Activity Trend */}
         <Card className="bg-slate-900/80 border-slate-800 text-white rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -176,7 +169,6 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
           </div>
         </Card>
 
-        {/* Subject Study Breakdown */}
         <Card className="bg-slate-900/80 border-slate-800 text-white rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -185,18 +177,22 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
             </h3>
           </div>
 
-          <div className="h-64 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={subjectBreakdown}>
-                <XAxis dataKey="subject" stroke="#64748b" fontSize={11} />
-                <YAxis stroke="#64748b" fontSize={11} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                />
-                <Bar dataKey="studyMinutes" fill="#6366f1" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {subjectBreakdown.length > 0 ? (
+            <div className="h-64 w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={subjectBreakdown}>
+                  <XAxis dataKey="subject" stroke="#64748b" fontSize={11} />
+                  <YAxis stroke="#64748b" fontSize={11} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
+                  />
+                  <Bar dataKey="studyMinutes" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 py-20 text-center">No study data available yet.</p>
+          )}
         </Card>
       </div>
     </div>

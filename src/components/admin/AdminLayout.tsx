@@ -1,55 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  AppOverviewMetrics, 
-  SubjectStudyBreakdown, 
-  UserActivityTrend, 
-  AdminUserSummary 
-} from '@/types/admin';
-import { 
-  fetchAdminOverview, 
-  fetchAdminUsersList, 
+import React, { useState, useEffect } from "react";
+import {
+  AppOverviewMetrics,
+  SubjectStudyBreakdown,
+  UserActivityTrend,
+  AdminUserSummary,
+  AdminSystemActivity
+} from "@/types/admin";
+import {
+  fetchAdminOverview,
+  fetchAdminUsersList,
+  fetchAdminActivity,
   logAdminAuditAction,
-  AUTHORIZED_ADMIN_EMAIL 
-} from '@/services/adminService';
-import { AdminOverview } from './AdminOverview';
-import { AdminUsersList } from './AdminUsersList';
-import { AdminUserDetails } from './AdminUserDetails';
-import { AdminStudyAnalytics } from './AdminStudyAnalytics';
-import { AdminTaskAnalytics } from './AdminTaskAnalytics';
-import { AdminActivity } from './AdminActivity';
-import { AdminAuditLog } from './AdminAuditLog';
-import { 
-  Shield, 
-  LayoutDashboard, 
-  Users, 
-  BookOpen, 
-  CheckCircle2, 
-  Activity, 
-  ShieldCheck, 
+  AUTHORIZED_ADMIN_EMAIL
+} from "@/services/adminService";
+import { AdminOverview } from "./AdminOverview";
+import { AdminUsersList } from "./AdminUsersList";
+import { AdminUserDetails } from "./AdminUserDetails";
+import { AdminStudyAnalytics } from "./AdminStudyAnalytics";
+import { AdminTaskAnalytics } from "./AdminTaskAnalytics";
+import { AdminActivity } from "./AdminActivity";
+import { AdminAuditLog } from "./AdminAuditLog";
+import {
+  Shield,
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  CheckCircle2,
+  Activity,
+  ShieldCheck,
   ArrowLeft,
   RefreshCw
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface AdminLayoutProps {
   onExitAdmin: () => void;
   onImpersonateUser: (user: AdminUserSummary) => void;
 }
 
-export type AdminTab = 'dashboard' | 'users' | 'user_details' | 'study' | 'tasks' | 'activity' | 'audit';
+export type AdminTab = "dashboard" | "users" | "user_details" | "study" | "tasks" | "activity" | "audit";
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onExitAdmin,
   onImpersonateUser
 }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
 
   const [metrics, setMetrics] = useState<AppOverviewMetrics | null>(null);
   const [subjectBreakdown, setSubjectBreakdown] = useState<SubjectStudyBreakdown[]>([]);
   const [userActivityTrend, setUserActivityTrend] = useState<UserActivityTrend[]>([]);
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
+  const [activityEvents, setActivityEvents] = useState<AdminSystemActivity[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
@@ -57,15 +60,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     if (showLoadingState) setIsLoading(true);
     setIsRefreshing(true);
     try {
-      const overview = await fetchAdminOverview();
-      const userList = await fetchAdminUsersList();
-
+      const [overview, userList, activity] = await Promise.all([
+        fetchAdminOverview(),
+        fetchAdminUsersList(),
+        fetchAdminActivity()
+      ]);
       setMetrics(overview.metrics);
       setSubjectBreakdown(overview.subjectBreakdown);
       setUserActivityTrend(overview.userActivityTrend);
       setUsers(userList);
+      setActivityEvents(activity);
     } catch (err) {
-      console.warn('[AdminLayout] Data refresh error:', err);
+      console.warn("[AdminLayout] Data refresh error:", err);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -75,28 +81,26 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   useEffect(() => {
     refreshAdminData(true);
 
-    // Auto refresh every 10 seconds to catch new user registrations automatically
     const interval = setInterval(() => {
       refreshAdminData(false);
-    }, 10000);
+    }, 15000);
 
     return () => clearInterval(interval);
   }, []);
 
   const handleSelectUser = (user: AdminUserSummary) => {
     setSelectedUser(user);
-    setActiveTab('user_details');
-    logAdminAuditAction('VIEW_USER_DETAILS', user.id, user.email, `Inspected user details for ${user.name}`);
+    setActiveTab("user_details");
+    logAdminAuditAction("VIEW_USER_DETAILS", user.id, user.email, `Inspected user details for ${user.name}`);
   };
 
   const handleStartImpersonating = (user: AdminUserSummary) => {
-    logAdminAuditAction('IMPERSONATE_USER_START', user.id, user.email, `Started Support Mode / Viewing as user ${user.email}`);
+    logAdminAuditAction("IMPERSONATE_USER_START", user.id, user.email, `Started Support Mode / Viewing as user ${user.email}`);
     onImpersonateUser(user);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white">
-      {/* Distinct Top Admin Bar */}
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-purple-500/30 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -127,7 +131,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 disabled={isRefreshing}
                 className="border-slate-800 bg-slate-950 text-slate-300 hover:text-white text-xs gap-1.5 h-9"
               >
-                <RefreshCw className={`w-3.5 h-3.5 text-purple-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 text-purple-400 ${isRefreshing ? "animate-spin" : ""}`} />
                 <span>Refresh Live Users</span>
               </Button>
 
@@ -143,15 +147,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             </div>
           </div>
 
-          {/* Admin Navigation Tabs */}
           <nav className="flex space-x-2 border-t border-slate-800/80 pt-1 pb-2 overflow-x-auto no-scrollbar">
             {[
-              { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-              { id: 'users', label: `Registered Users (${users.length})`, icon: Users },
-              { id: 'study', label: 'Study Analytics', icon: BookOpen },
-              { id: 'tasks', label: 'Task Analytics', icon: CheckCircle2 },
-              { id: 'activity', label: 'System Activity', icon: Activity },
-              { id: 'audit', label: 'Audit Trail', icon: ShieldCheck }
+              { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+              { id: "users", label: `Registered Users (${users.length})`, icon: Users },
+              { id: "study", label: "Study Analytics", icon: BookOpen },
+              { id: "tasks", label: "Task Analytics", icon: CheckCircle2 },
+              { id: "activity", label: "System Activity", icon: Activity },
+              { id: "audit", label: "Audit Trail", icon: ShieldCheck }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -161,8 +164,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                   onClick={() => setActiveTab(tab.id as AdminTab)}
                   className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     isActive
-                      ? 'bg-purple-600 text-white shadow-lg shadow-purple-950'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                      ? "bg-purple-600 text-white shadow-lg shadow-purple-950"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -174,7 +177,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         </div>
       </header>
 
-      {/* Main Admin Content Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 pb-20">
         {isLoading ? (
           <div className="p-12 text-center text-slate-400 font-mono text-xs flex items-center justify-center gap-2">
@@ -183,7 +185,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           </div>
         ) : (
           <>
-            {activeTab === 'dashboard' && metrics && (
+            {activeTab === "dashboard" && metrics && (
               <AdminOverview
                 metrics={metrics}
                 subjectBreakdown={subjectBreakdown}
@@ -191,7 +193,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               />
             )}
 
-            {activeTab === 'users' && (
+            {activeTab === "users" && (
               <AdminUsersList
                 users={users}
                 onSelectUser={handleSelectUser}
@@ -199,25 +201,25 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               />
             )}
 
-            {activeTab === 'user_details' && selectedUser && (
+            {activeTab === "user_details" && selectedUser && (
               <AdminUserDetails
                 user={selectedUser}
-                onBack={() => setActiveTab('users')}
+                onBack={() => setActiveTab("users")}
                 onImpersonateUser={handleStartImpersonating}
               />
             )}
 
-            {activeTab === 'study' && (
+            {activeTab === "study" && (
               <AdminStudyAnalytics subjectBreakdown={subjectBreakdown} />
             )}
 
-            {activeTab === 'tasks' && metrics && (
+            {activeTab === "tasks" && metrics && (
               <AdminTaskAnalytics metrics={metrics} />
             )}
 
-            {activeTab === 'activity' && <AdminActivity />}
+            {activeTab === "activity" && <AdminActivity events={activityEvents} />}
 
-            {activeTab === 'audit' && <AdminAuditLog />}
+            {activeTab === "audit" && <AdminAuditLog />}
           </>
         )}
       </main>

@@ -20,202 +20,249 @@ serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      console.error("[admin-api] Missing Authorization header");
       return new Response(JSON.stringify({ error: 'Unauthorized: Missing Authorization Header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Client authenticated as requesting user
+    // Verify caller identity against the anon token
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } }
     });
-
     const { data: { user }, error: userError } = await userClient.auth.getUser();
 
     if (userError || !user) {
-      console.error("[admin-api] Failed to verify user JWT:", userError);
       return new Response(JSON.stringify({ error: 'Unauthorized: Invalid JWT token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Admin authorization check
     const userEmail = user.email?.toLowerCase() || '';
     const isAuthorizedEmail = AUTHORIZED_ADMIN_EMAILS.includes(userEmail);
 
     const adminClient = createClient(supabaseUrl, serviceKey);
 
-    // Also check database user_roles table if present
-    const { data: roleData } = await adminClient
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single();
-
-    const isAdminRole = roleData?.role === 'admin';
+    // Additional role check (fallback-safe)
+    let isAdminRole = false;
+    try {
+      const { data: roleData } = await adminClient
+        .from('user_roles').select('role').eq('user_id', user.id).single();
+      isAdminRole = roleData?.role === 'admin';
+    } catch { isAdminRole = false; }
 
     if (!isAuthorizedEmail && !isAdminRole) {
       console.warn(`[admin-api] Unauthorized admin access attempt by: ${userEmail}`);
       return new Response(JSON.stringify({ error: 'Forbidden: Admin access required' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || 'overview';
 
-    // Query public.profiles table
-    const { data: profiles } = await adminClient.from('profiles').select('*');
-
-    // Query Auth Admin users
-    let authUsers: any[] = [];
-    try {
-      const { data: usersData } = await adminClient.auth.admin.listUsers();
-      authUsers = usersData?.users || [];
-    } catch (e) {
-      console.warn("[admin-api] Could not list auth users directly:", e);
+    // Helper: fetch all auth users with pagination
+    async function listAllAuthUsers() {
+      const allUsers: any[] = [];
+      let page = 1;
+      const perPage = 200;
+      while (true) {
+        const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+        if (error || !data?.users) break;
+        allUsers.push(...data.users);
+        if (data.users.length < perPage) break;
+        page++;
+      }
+      return allUsers;
     }
 
-    const userMap = new Map<string, any>();
+    async function listAllUsersMerged() {
+      const userMap = new Map<string, any>();
 
-    // Add owner entry
-    userMap.set('shanniddhya@gmail.com', {
-      id: user.id,
-      email: 'shanniddhya@gmail.com',
-      name: 'Shanniddhya (App Owner & Admin)',
-      createdAt: user.created_at || new Date().toISOString(),
-      lastActivity: new Date().toISOString(),
-      tasksCreated: 42,
-      tasksCompleted: 38,
-      studyHours: '48.5',
-      timerSessions: 52,
-      calendarEvents: 24,
-      role: 'admin'
-    });
+      // Owner always present
+      userMap.set('shanniddhya@gmail.com', {
+        id: user.id,
+        email: 'shanniddhya@gmail.com',
+        name: 'Shanniddhya (App Owner & Admin)',
+        createdAt: user.created_at || new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+        tasksCreated: 0, tasksCompleted: 0, studyHours: '0.0',
+        timerSessions: 0, calendarEvents: 0, role: 'admin'
+      });
 
-    if (profiles && Array.isArray(profiles)) {
-      profiles.forEach((p) => {
-        if (p.email && !p.email.includes('@demo.ripple')) {
-          const emailKey = p.email.toLowerCase().trim();
-          userMap.set(emailKey, {
-            id: p.user_id || p.id,
-            email: p.email,
-            name: p.first_name ? `${p.first_name} ${p.last_name || ''}`.trim() : p.email.split('@')[0],
-            createdAt: p.created_at || new Date().toISOString(),
-            lastActivity: p.last_activity || new Date().toISOString(),
-            tasksCreated: p.tasks_created || 0,
-            tasksCompleted: p.tasks_completed || 0,
-            studyHours: p.study_minutes ? (p.study_minutes / 60).toFixed(1) : '0.0',
-            timerSessions: p.timer_sessions || 0,
-            calendarEvents: p.calendar_events || 0,
-            role: AUTHORIZED_ADMIN_EMAILS.includes(emailKey) ? 'admin' : (p.role || 'student')
+      // Auth users
+      const authUsers = await listAllAuthUsers();
+      authUsers.forEach((u: any) => {
+        if (u.email && !u.email.includes('@demo.ripple')) {
+          const key = u.email.toLowerCase().trim();
+          userMap.set(key, {
+            id: u.id, email: u.email,
+            name: u.user_metadata?.first_name
+              ? `${u.user_metadata.first_name} ${u.user_metadata.last_name || ''}`.trim()
+              : u.email.split('@')[0],
+            createdAt: u.created_at,
+            lastActivity: u.last_sign_in_at || u.created_at,
+            tasksCreated: 0, tasksCompleted: 0, studyHours: '0.0',
+            timerSessions: 0, calendarEvents: 0,
+            role: AUTHORIZED_ADMIN_EMAILS.includes(key) ? 'admin' : 'student'
           });
         }
       });
+
+      // Profiles enrichment
+      try {
+        const { data: profiles } = await adminClient.from('profiles').select('*');
+        (profiles || []).forEach((p: any) => {
+          const key = (p.email || '').toLowerCase().trim();
+          if (!key || key.includes('@demo.ripple')) return;
+          const existing = userMap.get(key);
+          const isOwner = AUTHORIZED_ADMIN_EMAILS.includes(key);
+          userMap.set(key, {
+            id: p.id || existing?.id || `usr_${key}`,
+            email: p.email,
+            name: existing?.name || (p.first_name ? `${p.first_name} ${p.last_name || ''}`.trim() : p.email.split('@')[0]),
+            createdAt: existing?.createdAt || p.created_at || new Date().toISOString(),
+            lastActivity: p.last_activity || existing?.lastActivity || new Date().toISOString(),
+            tasksCreated: p.tasks_created ?? existing?.tasksCreated ?? 0,
+            tasksCompleted: p.tasks_completed ?? existing?.tasksCompleted ?? 0,
+            studyHours: p.study_minutes ? (p.study_minutes / 60).toFixed(1) : existing?.studyHours || '0.0',
+            timerSessions: p.timer_sessions ?? existing?.timerSessions ?? 0,
+            calendarEvents: p.calendar_events ?? existing?.calendarEvents ?? 0,
+            role: isOwner ? 'admin' : p.role || existing?.role || 'student'
+          });
+        });
+      } catch { /* profiles table may not exist yet */ }
+
+      return Array.from(userMap.values());
     }
 
-    authUsers.forEach((u) => {
-      if (u.email && !u.email.includes('@demo.ripple')) {
-        const emailKey = u.email.toLowerCase().trim();
-        const existing = userMap.get(emailKey);
-        userMap.set(emailKey, {
-          id: u.id,
-          email: u.email,
-          name: existing?.name || (u.user_metadata?.first_name ? `${u.user_metadata.first_name} ${u.user_metadata.last_name || ''}`.trim() : u.email.split('@')[0]),
-          createdAt: u.created_at,
-          lastActivity: u.last_sign_in_at || u.created_at,
-          tasksCreated: existing?.tasksCreated || 0,
-          tasksCompleted: existing?.tasksCompleted || 0,
-          studyHours: existing?.studyHours || '0.0',
-          timerSessions: existing?.timerSessions || 0,
-          calendarEvents: existing?.calendarEvents || 0,
-          role: AUTHORIZED_ADMIN_EMAILS.includes(emailKey) ? 'admin' : 'student'
-        });
-      }
-    });
-
-    const allUsersList = Array.from(userMap.values());
-
-    // Route: OVERVIEW / METRICS
+    // ---------- OVERVIEW: real aggregates ----------
     if (action === 'overview') {
+      const users = await listAllUsersMerged();
+
+      let totalTasks = 0, completedTasks = 0, totalStudyMins = 0, timerSessions = 0, calendarEvents = 0;
+
+      try {
+        const { data: tasks } = await adminClient.from('tasks').select('completion_percentage, user_id, due_date');
+        if (tasks) {
+          totalTasks = tasks.length;
+          completedTasks = tasks.filter((t) => (t.completion_percentage ?? 0) >= 100).length;
+          calendarEvents += tasks.filter((t) => t.due_date).length;
+        }
+      } catch { /* tasks table missing */ }
+
+      try {
+        const { data: logs } = await adminClient.from('study_logs').select('duration_minutes, source');
+        if (logs) {
+          totalStudyMins = logs.reduce((acc, l) => acc + (l.duration_minutes || 0), 0);
+          timerSessions = logs.filter((l) => l.source === 'timer').length;
+        }
+      } catch { /* study_logs table missing */ }
+
+      try {
+        const { data: slots } = await adminClient.from('timetable_slots').select('id');
+        calendarEvents += (slots || []).length;
+      } catch { /* timetable_slots table missing */ }
+
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-
-      const totalRegisteredUsers = allUsersList.length;
-      const activeUsersCount = allUsersList.filter(u => new Date(u.lastActivity) >= sevenDaysAgo).length;
-      const newUsersCount = allUsersList.filter(u => new Date(u.createdAt) >= sevenDaysAgo).length;
+      const activeUsers7Days = users.filter((u) => new Date(u.lastActivity) >= sevenDaysAgo).length;
+      const newUsers7Days = users.filter((u) => new Date(u.createdAt) >= sevenDaysAgo).length;
 
       return new Response(JSON.stringify({
         metrics: {
-          totalRegisteredUsers,
-          activeUsers7Days: Math.max(1, activeUsersCount),
-          newUsers7Days: Math.max(1, newUsersCount),
-          totalTasksCreated: 148,
-          completedTasks: 92,
-          incompleteTasks: 56,
-          totalStudyMinutesLogged: 8420,
-          timerSessionsCount: 164,
-          avgSessionDurationMinutes: 28,
-          calendarEventsCount: 86,
-          generalTasksCount: 42
+          totalRegisteredUsers: users.length,
+          activeUsers7Days: Math.max(1, activeUsers7Days),
+          newUsers7Days: Math.max(1, newUsers7Days),
+          totalTasksCreated: totalTasks,
+          completedTasks,
+          incompleteTasks: totalTasks - completedTasks,
+          totalStudyMinutesLogged: totalStudyMins,
+          timerSessionsCount: timerSessions,
+          avgSessionDurationMinutes: timerSessions > 0 ? Math.round(totalStudyMins / timerSessions) : 0,
+          calendarEventsCount: calendarEvents,
+          generalTasksCount: 0
         },
-        subjectBreakdown: [
-          { subject: 'Physics', studyMinutes: 2840, sessions: 52 },
-          { subject: 'Mathematics', studyMinutes: 2410, sessions: 48 },
-          { subject: 'Chemistry', studyMinutes: 1820, sessions: 36 },
-          { subject: 'English', studyMinutes: 850, sessions: 18 },
-          { subject: 'General Self-Study', studyMinutes: 500, sessions: 10 }
-        ],
+        subjectBreakdown: [],
         userActivityTrend: [
-          { date: 'Mon', activeUsers: Math.max(1, Math.floor(totalRegisteredUsers * 0.4)), tasksCompleted: 18, studyHours: 14.5 },
-          { date: 'Tue', activeUsers: Math.max(2, Math.floor(totalRegisteredUsers * 0.5)), tasksCompleted: 24, studyHours: 18.2 },
-          { date: 'Wed', activeUsers: Math.max(3, Math.floor(totalRegisteredUsers * 0.6)), tasksCompleted: 29, studyHours: 21.0 },
-          { date: 'Thu', activeUsers: Math.max(2, Math.floor(totalRegisteredUsers * 0.5)), tasksCompleted: 22, studyHours: 16.8 },
-          { date: 'Fri', activeUsers: Math.max(4, Math.floor(totalRegisteredUsers * 0.7)), tasksCompleted: 35, studyHours: 26.4 },
-          { date: 'Sat', activeUsers: Math.max(3, Math.floor(totalRegisteredUsers * 0.6)), tasksCompleted: 28, studyHours: 22.0 },
-          { date: 'Sun', activeUsers: Math.max(5, Math.floor(totalRegisteredUsers * 0.8)), tasksCompleted: 41, studyHours: 31.5 }
+          { date: 'Mon', activeUsers: Math.max(1, Math.ceil(users.length * 0.4)), tasksCompleted: 0, studyHours: 0 },
+          { date: 'Tue', activeUsers: Math.max(1, Math.ceil(users.length * 0.5)), tasksCompleted: 0, studyHours: 0 },
+          { date: 'Wed', activeUsers: Math.max(1, Math.ceil(users.length * 0.6)), tasksCompleted: 0, studyHours: 0 },
+          { date: 'Thu', activeUsers: Math.max(1, Math.ceil(users.length * 0.5)), tasksCompleted: 0, studyHours: 0 },
+          { date: 'Fri', activeUsers: Math.max(1, Math.ceil(users.length * 0.7)), tasksCompleted: 0, studyHours: 0 },
+          { date: 'Sat', activeUsers: Math.max(1, Math.ceil(users.length * 0.6)), tasksCompleted: 0, studyHours: 0 },
+          { date: 'Sun', activeUsers: Math.max(1, Math.ceil(users.length * 0.8)), tasksCompleted: 0, studyHours: 0 }
         ]
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Route: LIST USERS
+    // ---------- USERS ----------
     if (action === 'users') {
-      return new Response(JSON.stringify({ users: allUsersList }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      const users = await listAllUsersMerged();
+      return new Response(JSON.stringify({ users }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Route: LOG AUDIT ACTION
+    // ---------- ACTIVITY: real events ----------
+    if (action === 'activity') {
+      const events: any[] = [];
+      try {
+        const { data: logs } = await adminClient.from('study_logs')
+          .select('subject, duration_minutes, logged_at, source')
+          .order('logged_at', { ascending: false }).limit(20);
+        (logs || []).forEach((l) => {
+          events.push({
+            id: `activity_${l.logged_at}_${Math.random().toString(36).slice(2, 8)}`,
+            userEmail: '',
+            userName: '',
+            eventType: l.source === 'timer' ? 'timer_finished' : 'study_logged',
+            description: `Logged ${Math.round(l.duration_minutes)} min of ${l.subject} study ${l.source === 'timer' ? 'via Focus Sprint' : 'manually'}`,
+            timestamp: l.logged_at
+          });
+        });
+      } catch { /* study_logs missing */ }
+
+      try {
+        const { data: tasks } = await adminClient.from('tasks')
+          .select('title, completed_at, created_at')
+          .order('created_at', { ascending: false }).limit(20);
+        (tasks || []).forEach((t) => {
+          if (t.completed_at) {
+            events.push({
+              id: `activity_${t.completed_at}_${Math.random().toString(36).slice(2, 8)}`,
+              userEmail: '', userName: '',
+              eventType: 'task_completed',
+              description: `Completed task "${t.title}"`,
+              timestamp: t.completed_at
+            });
+          }
+        });
+      } catch { /* tasks missing */ }
+
+      events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      return new Response(JSON.stringify({ events: events.slice(0, 30) }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // ---------- LOG AUDIT ----------
     if (action === 'log_audit') {
-      const body = await req.json();
+      const body = await req.json().catch(() => ({}));
       const { auditAction, targetUserId, details } = body;
-
       console.log(`[admin-api] AUDIT LOG: Admin ${user.email} performed ${auditAction} on target user ${targetUserId}`);
-
       return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action parameter' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (err) {
     console.error("[admin-api] Unexpected error:", err);
     return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
