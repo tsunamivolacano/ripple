@@ -1,151 +1,198 @@
-import React, { createContext, useContext } from 'react';
-import { useRippleAuth } from '@/hooks/useRippleAuth';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { 
+  TimetableSlot, 
+  Task, 
+  EvidenceEntry, 
+  StudyLog,
+  ProcrastinationDebt, 
+  UserSettings,
+  NotificationSettings
+} from '@/types/ripple';
+import { AdminUserSummary } from '@/types/admin';
+import { isAuthorizedAdmin, logAdminAuditAction, AUTHORIZED_ADMIN_EMAIL } from '@/services/adminService';
+import { useRippleAuth, UserAccount, AuthResponse } from '@/hooks/useRippleAuth';
+import { useRippleTutorial } from '@/hooks/useRippleTutorial';
 import { useRippleData } from '@/hooks/useRippleData';
-import { isAuthorizedAdmin } from '@/services/adminService';
-import type { AdminUserSummary } from '@/types/admin';
-import type { TaskStatus } from '@/types/ripple';
+import { registerServiceWorker } from '@/utils/notificationService';
+import { showSuccess } from '@/utils/toast';
+
+export type { UserAccount, AuthResponse };
 
 interface RippleContextType {
-  // Auth
-  currentUser: ReturnType<typeof useRippleAuth>['currentUser'];
-  loginWithEmail: ReturnType<typeof useRippleAuth>['loginWithEmail'];
-  signUpWithEmail: ReturnType<typeof useRippleAuth>['signUpWithEmail'];
-  loginDemoAccount: ReturnType<typeof useRippleAuth>['loginDemoAccount'];
-  logout: ReturnType<typeof useRippleAuth>['logout'];
+  currentUser: UserAccount | null;
+  slots: TimetableSlot[];
+  tasks: Task[];
+  evidenceEntries: EvidenceEntry[];
+  studyLogs: StudyLog[];
+  debt: ProcrastinationDebt;
+  settings: UserSettings;
+  notificationSettings: NotificationSettings;
+  currentPersonaId: string;
+  activeTaskForPrediction: Task | null;
+  activeFocusTask: Task | null;
+  completedTaskForCelebration: Task | null;
+  isLoadingData: boolean;
 
-  // Data
+  // Admin & Support Impersonation State
   isAdmin: boolean;
   isAdminView: boolean;
-  setAdminView: (v: boolean) => void;
+  setAdminView: (open: boolean) => void;
   impersonatedUser: AdminUserSummary | null;
   startImpersonatingUser: (user: AdminUserSummary) => void;
   exitImpersonatedUser: () => void;
 
-  // Tutorial
+  // Notification Modal
+  isNotificationModalOpen: boolean;
+  setNotificationModalOpen: (open: boolean) => void;
+  updateNotificationSettings: (newSettings: Partial<NotificationSettings>) => Promise<void>;
+
+  // Tutorial State
   isTutorialOpen: boolean;
   currentTutorialStep: number;
   hasCompletedTutorial: boolean;
-  setHasCompletedTutorial: (v: boolean) => void;
   startTutorial: () => void;
   replayTutorial: () => void;
   closeTutorial: () => void;
   completeTutorial: () => void;
   setTutorialStep: (step: number) => void;
+  
+  // Auth actions
+  loginWithEmail: (email: string, password: string) => Promise<AuthResponse>;
+  signUpWithEmail: (email: string, password: string) => Promise<AuthResponse>;
+  loginDemoAccount: (personaId: string) => void;
+  logout: () => void;
 
-  // Data hook spread
-  slots: ReturnType<typeof useRippleData>['slots'];
-  tasks: ReturnType<typeof useRippleData>['tasks'];
-  evidenceEntries: ReturnType<typeof useRippleData>['evidenceEntries'];
-  studyLogs: ReturnType<typeof useRippleData>['studyLogs'];
-  debt: ReturnType<typeof useRippleData>['debt'];
-  settings: ReturnType<typeof useRippleData>['settings'];
-  notificationSettings: ReturnType<typeof useRippleData>['notificationSettings'];
-  currentPersonaId: ReturnType<typeof useRippleData>['currentPersonaId'];
-  activeTaskForPrediction: ReturnType<typeof useRippleData>['activeTaskForPrediction'];
-  activeFocusTask: ReturnType<typeof useRippleData>['activeFocusTask'];
-  completedTaskForCelebration: ReturnType<typeof useRippleData>['completedTaskForCelebration'];
-  isLoadingData: ReturnType<typeof useRippleData>['isLoadingData'];
-  isNotificationModalOpen: ReturnType<typeof useRippleData>['isNotificationModalOpen'];
-  setNotificationModalOpen: ReturnType<typeof useRippleData>['setNotificationModalOpen'];
-  setActiveTaskForPrediction: ReturnType<typeof useRippleData>['setActiveTaskForPrediction'];
-  setActiveFocusTask: ReturnType<typeof useRippleData>['setActiveFocusTask'];
-  setCompletedTaskForCelebration: ReturnType<typeof useRippleData>['setCompletedTaskForCelebration'];
-  addSlot: ReturnType<typeof useRippleData>['addSlot'];
-  updateSlot: ReturnType<typeof useRippleData>['updateSlot'];
-  deleteSlot: ReturnType<typeof useRippleData>['deleteSlot'];
-  addTask: ReturnType<typeof useRippleData>['addTask'];
-  updateTaskProgress: ReturnType<typeof useRippleData>['updateTaskProgress'];
-  completeTask: ReturnType<typeof useRippleData>['completeTask'];
-  renegotiateTask: ReturnType<typeof useRippleData>['renegotiateTask'];
-  deleteTask: ReturnType<typeof useRippleData>['deleteTask'];
-  logEvidence: ReturnType<typeof useRippleData>['logEvidence'];
-  addStudyLog: ReturnType<typeof useRippleData>['addStudyLog'];
-  deleteStudyLog: ReturnType<typeof useRippleData>['deleteStudyLog'];
-  updateSettings: ReturnType<typeof useRippleData>['updateSettings'];
-  updateNotificationSettings: ReturnType<typeof useRippleData>['updateNotificationSettings'];
-  loadPersonaData: ReturnType<typeof useRippleData>['loadPersonaData'];
-  resetAllData: ReturnType<typeof useRippleData>['resetAllData'];
+  setActiveTaskForPrediction: (task: Task | null) => void;
+  setActiveFocusTask: (task: Task | null) => void;
+  setCompletedTaskForCelebration: (task: Task | null) => void;
+  
+  // Slot management
+  addSlot: (slot: Omit<TimetableSlot, 'id'>) => Promise<void>;
+  updateSlot: (slot: TimetableSlot) => Promise<void>;
+  deleteSlot: (id: string) => Promise<void>;
+
+  // Task management
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  updateTaskProgress: (taskId: string, percentage: number) => Promise<void>;
+  completeTask: (taskId: string) => Promise<void>;
+  renegotiateTask: (taskId: string, newDueDate: string, reason: string) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+
+  // Evidence log management
+  logEvidence: (entry: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => Promise<void>;
+
+  // Study Tracker management
+  addStudyLog: (log: Omit<StudyLog, 'id' | 'loggedAt'>) => Promise<void>;
+  deleteStudyLog: (id: string) => Promise<void>;
+
+  // Settings
+  updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
+  
+  // Persona actions
+  loadPersonaData: (personaId: string) => void;
+  resetAllData: () => void;
 }
 
 const RippleContext = createContext<RippleContextType | undefined>(undefined);
 
-export function RippleProvider({ children }: { children: React.ReactNode }) {
+export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth = useRippleAuth();
+  const tutorial = useRippleTutorial(auth.currentUser);
   const data = useRippleData(auth.currentUser);
 
-  const [isAdminView, setAdminView] = React.useState(false);
-  const [impersonatedUser, setImpersonatedUser] = React.useState<AdminUserSummary | null>(null);
-
-  // Tutorial state from useRippleTutorial
-  const [isTutorialOpen, setIsTutorialOpen] = React.useState(false);
-  const [currentTutorialStep, setCurrentTutorialStep] = React.useState(0);
-  const [hasCompletedTutorial, setHasCompletedTutorial] = React.useState(false);
-
-  const startTutorial = () => {
-    setCurrentTutorialStep(0);
-    setIsTutorialOpen(true);
-  };
-
-  const replayTutorial = () => {
-    setCurrentTutorialStep(0);
-    setIsTutorialOpen(true);
-  };
-
-  const closeTutorial = () => {
-    setIsTutorialOpen(false);
-  };
-
-  const completeTutorial = () => {
-    setHasCompletedTutorial(true);
-    setIsTutorialOpen(false);
-    if (auth.currentUser && !auth.currentUser.isDemo) {
-      localStorage.setItem(`ripple_tutorial_completed_${auth.currentUser.id}`, 'true');
-    }
-  };
-
-  const setTutorialStep = (step: number) => {
-    setCurrentTutorialStep(step);
-  };
+  const [isAdminView, setAdminView] = useState<boolean>(false);
+  const [impersonatedUser, setImpersonatedUser] = useState<AdminUserSummary | null>(null);
 
   const isAdmin = isAuthorizedAdmin(auth.currentUser?.email);
 
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
   const startImpersonatingUser = (user: AdminUserSummary) => {
+    if (!isAdmin) return;
     setImpersonatedUser(user);
-    setAdminView(false);
+    setAdminView(false); // Switch to student app view with support banner
+    showSuccess(`Viewing app as ${user.name}`);
   };
 
   const exitImpersonatedUser = () => {
+    if (impersonatedUser) {
+      logAdminAuditAction('IMPERSONATE_USER_END', impersonatedUser.id, impersonatedUser.email, `Exited Support Mode for ${impersonatedUser.email}`);
+    }
     setImpersonatedUser(null);
-    setAdminView(true);
+    setAdminView(true); // Return to Admin Command Center
+    showSuccess('Exited Support Mode. Returned to Admin Dashboard.');
   };
 
-  const value: RippleContextType = {
-    ...auth,
-    ...data,
-    isAdmin,
-    isAdminView,
-    setAdminView,
-    impersonatedUser,
-    startImpersonatingUser,
-    exitImpersonatedUser,
-    isTutorialOpen,
-    currentTutorialStep,
-    hasCompletedTutorial,
-    setHasCompletedTutorial,
-    startTutorial,
-    replayTutorial,
-    closeTutorial,
-    completeTutorial,
-    setTutorialStep,
-  };
+  return (
+    <RippleContext.Provider
+      value={{
+        currentUser: auth.currentUser,
+        loginWithEmail: auth.loginWithEmail,
+        signUpWithEmail: auth.signUpWithEmail,
+        loginDemoAccount: auth.loginDemoAccount,
+        logout: auth.logout,
 
-  return <RippleContext.Provider value={value}>{children}</RippleContext.Provider>;
-}
+        isAdmin,
+        isAdminView,
+        setAdminView,
+        impersonatedUser,
+        startImpersonatingUser,
+        exitImpersonatedUser,
 
-export function useRipple(): RippleContextType {
+        isTutorialOpen: tutorial.isTutorialOpen,
+        currentTutorialStep: tutorial.currentTutorialStep,
+        hasCompletedTutorial: tutorial.hasCompletedTutorial,
+        startTutorial: tutorial.startTutorial,
+        replayTutorial: tutorial.replayTutorial,
+        closeTutorial: tutorial.closeTutorial,
+        completeTutorial: tutorial.completeTutorial,
+        setTutorialStep: tutorial.setTutorialStep,
+
+        slots: data.slots,
+        tasks: data.tasks,
+        evidenceEntries: data.evidenceEntries,
+        studyLogs: data.studyLogs,
+        debt: data.debt,
+        settings: data.settings,
+        notificationSettings: data.notificationSettings,
+        currentPersonaId: data.currentPersonaId,
+        activeTaskForPrediction: data.activeTaskForPrediction,
+        activeFocusTask: data.activeFocusTask,
+        completedTaskForCelebration: data.completedTaskForCelebration,
+        isLoadingData: data.isLoadingData,
+        isNotificationModalOpen: data.isNotificationModalOpen,
+        setNotificationModalOpen: data.setNotificationModalOpen,
+        setActiveTaskForPrediction: data.setActiveTaskForPrediction,
+        setActiveFocusTask: data.setActiveFocusTask,
+        setCompletedTaskForCelebration: data.setCompletedTaskForCelebration,
+        addSlot: data.addSlot,
+        updateSlot: data.updateSlot,
+        deleteSlot: data.deleteSlot,
+        addTask: data.addTask,
+        updateTaskProgress: data.updateTaskProgress,
+        completeTask: data.completeTask,
+        renegotiateTask: data.renegotiateTask,
+        deleteTask: data.deleteTask,
+        logEvidence: data.logEvidence,
+        addStudyLog: data.addStudyLog,
+        deleteStudyLog: data.deleteStudyLog,
+        updateSettings: data.updateSettings,
+        updateNotificationSettings: data.updateNotificationSettings,
+        loadPersonaData: data.loadPersonaData,
+        resetAllData: data.resetAllData
+      }}
+    >
+      {children}
+    </RippleContext.Provider>
+  );
+};
+
+export const useRipple = () => {
   const context = useContext(RippleContext);
   if (!context) {
     throw new Error('useRipple must be used within a RippleProvider');
   }
   return context;
-}
+};

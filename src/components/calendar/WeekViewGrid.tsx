@@ -1,5 +1,5 @@
 import React from 'react';
-import { Task, TimetableSlot, StudyLog } from '@/types/ripple';
+import { Task, TimetableSlot } from '@/types/ripple';
 import { getStatusTheme } from '@/utils/timeUtils';
 import { FilterType } from './CalendarHeader';
 
@@ -8,10 +8,9 @@ interface WeekViewGridProps {
   hours: number[];
   today: Date;
   filterType: FilterType;
-  getItemsForDate: (date: Date) => { dayTasks: Task[]; daySlots: TimetableSlot[]; dayStudyLogs: StudyLog[] };
+  getItemsForDate: (date: Date) => { dayTasks: Task[]; daySlots: TimetableSlot[] };
   onSelectTask: (task: Task) => void;
   onSelectSlot: (slot: TimetableSlot) => void;
-  onSelectStudyLog: (log: StudyLog) => void;
 }
 
 export const WeekViewGrid: React.FC<WeekViewGridProps> = ({
@@ -21,8 +20,7 @@ export const WeekViewGrid: React.FC<WeekViewGridProps> = ({
   filterType,
   getItemsForDate,
   onSelectTask,
-  onSelectSlot,
-  onSelectStudyLog
+  onSelectSlot
 }) => {
   const isSameDay = (d1: Date, d2: Date) =>
     d1.getFullYear() === d2.getFullYear() &&
@@ -67,13 +65,7 @@ export const WeekViewGrid: React.FC<WeekViewGridProps> = ({
 
               {/* Day Columns for this hour */}
               {currentWeekDays.map((date, dayIdx) => {
-                const { dayTasks, daySlots, dayStudyLogs } = getItemsForDate(date);
-
-                // Matching Study Logs
-                const matchingLogs = dayStudyLogs.filter((log) => {
-                  const logH = new Date(log.loggedAt).getHours();
-                  return logH === hour;
-                });
+                const { dayTasks, daySlots } = getItemsForDate(date);
 
                 // Slots matching start hour
                 const matchingSlots = daySlots.filter((s) => {
@@ -83,7 +75,7 @@ export const WeekViewGrid: React.FC<WeekViewGridProps> = ({
 
                 // Tasks matching due hour
                 const matchingTasks = dayTasks.filter((t) => {
-                  const dueH = new Date(t.dueDate || Date.now()).getHours();
+                  const dueH = new Date(t.dueDate).getHours();
                   return dueH === hour;
                 });
 
@@ -92,25 +84,7 @@ export const WeekViewGrid: React.FC<WeekViewGridProps> = ({
                     key={dayIdx}
                     className="min-h-[48px] rounded-lg bg-slate-950/40 border border-slate-800/50 p-1 space-y-1 relative"
                   >
-                    {/* Render Study Logs */}
-                    {filterType !== 'classes' &&
-                      matchingLogs.map((log) => {
-                        const hrs = Math.floor(log.durationMinutes / 60);
-                        const mins = log.durationMinutes % 60;
-                        const durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-                        return (
-                          <div
-                            key={log.id}
-                            onClick={() => onSelectStudyLog(log)}
-                            className="p-1 rounded bg-emerald-950/90 border border-emerald-500/50 text-[10px] text-emerald-200 truncate cursor-pointer hover:bg-emerald-900"
-                          >
-                            <span className="font-bold">⏱️ {durationStr}</span> {log.subject}
-                          </div>
-                        );
-                      })}
-
                     {filterType !== 'tasks' &&
-                      filterType !== 'study_logs' &&
                       matchingSlots.map((s) => (
                         <div
                           key={s.id}
@@ -122,7 +96,6 @@ export const WeekViewGrid: React.FC<WeekViewGridProps> = ({
                       ))}
 
                     {filterType !== 'classes' &&
-                      filterType !== 'study_logs' &&
                       matchingTasks.map((t) => {
                         const theme = getStatusTheme(t.status);
                         return (

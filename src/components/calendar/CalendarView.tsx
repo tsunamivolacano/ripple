@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useRipple } from '@/context/RippleContext';
-import { Task, TimetableSlot, StudyLog } from '@/types/ripple';
+import { Task, TimetableSlot } from '@/types/ripple';
 import { CalendarHeader, ViewMode, FilterType } from './CalendarHeader';
 import { MonthViewGrid } from './MonthViewGrid';
 import { WeekViewGrid } from './WeekViewGrid';
@@ -19,12 +19,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onOpenFocus,
   onOpenNewTaskModal
 }) => {
-  const { tasks, slots, studyLogs, deleteTask, deleteSlot, deleteStudyLog } = useRipple();
+  const { tasks, slots, deleteTask, deleteSlot } = useRipple();
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimetableSlot | null>(null);
-  const [selectedStudyLog, setSelectedStudyLog] = useState<StudyLog | null>(null);
   const [filterType, setFilterType] = useState<FilterType>('all');
 
   const userTimeZone = useMemo(() => {
@@ -40,36 +39,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const getItemsForDate = (date: Date) => {
     const dayTasks = tasks.filter((t) => {
       if (t.status === 'completed' && filterType === 'classes') return false;
-
-      if (filterType === 'exams') {
-        if (t.taskType !== 'exam' && t.taskType !== 'test') return false;
-      } else if (filterType === 'assignments') {
-        if (t.taskType !== 'assignment' && t.taskType !== 'essay' && t.taskType !== 'lab_report' && t.taskType !== 'problem_set' && t.taskType !== 'deadline') return false;
-      } else if (filterType === 'study_sessions') {
-        if (t.taskType !== 'study_session' && t.taskType !== 'self_study' && t.taskType !== 'revision' && t.taskType !== 'reading') return false;
-      } else if (filterType === 'classes' || filterType === 'study_logs') {
-        return false;
-      }
-
       return doesTaskOccurOnDate(t, date);
     });
 
-    const daySlots = filterType === 'exams' || filterType === 'assignments' || filterType === 'study_sessions' || filterType === 'study_logs'
-      ? []
-      : slots.filter((s) => doesSlotOccurOnDate(s, date));
+    const daySlots = slots.filter((s) => doesSlotOccurOnDate(s, date));
 
-    const dayStudyLogs = filterType === 'exams' || filterType === 'assignments' || filterType === 'classes'
-      ? []
-      : studyLogs.filter((log) => {
-          const logDate = new Date(log.loggedAt);
-          return (
-            logDate.getFullYear() === date.getFullYear() &&
-            logDate.getMonth() === date.getMonth() &&
-            logDate.getDate() === date.getDate()
-          );
-        });
-
-    return { dayTasks, daySlots, dayStudyLogs };
+    return { dayTasks, daySlots };
   };
 
   const navigateDate = (amount: number) => {
@@ -149,7 +124,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           getItemsForDate={getItemsForDate}
           onSelectTask={setSelectedTask}
           onSelectSlot={setSelectedSlot}
-          onSelectStudyLog={setSelectedStudyLog}
         />
       )}
 
@@ -162,7 +136,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           getItemsForDate={getItemsForDate}
           onSelectTask={setSelectedTask}
           onSelectSlot={setSelectedSlot}
-          onSelectStudyLog={setSelectedStudyLog}
         />
       )}
 
@@ -176,7 +149,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           getItemsForDate={getItemsForDate}
           onSelectTask={setSelectedTask}
           onSelectSlot={setSelectedSlot}
-          onSelectStudyLog={setSelectedStudyLog}
           onOpenPrediction={onOpenPrediction}
         />
       )}
@@ -184,15 +156,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       <CalendarModals
         selectedTask={selectedTask}
         selectedSlot={selectedSlot}
-        selectedStudyLog={selectedStudyLog}
         onCloseTaskModal={() => setSelectedTask(null)}
         onCloseSlotModal={() => setSelectedSlot(null)}
-        onCloseStudyLogModal={() => setSelectedStudyLog(null)}
         onOpenPrediction={onOpenPrediction}
         onOpenFocus={onOpenFocus}
         onDeleteTask={deleteTask}
         onDeleteSlot={deleteSlot}
-        onDeleteStudyLog={deleteStudyLog}
       />
     </div>
   );

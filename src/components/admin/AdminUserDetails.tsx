@@ -1,13 +1,16 @@
 import React from 'react';
 import { AdminUserSummary } from '@/types/admin';
-import {
-  ArrowLeft,
-  ExternalLink,
-  BookOpen,
-  CheckCircle2,
-  CalendarDays,
+import { 
+  ArrowLeft, 
+  ExternalLink, 
+  UserCheck, 
+  BookOpen, 
+  CheckCircle2, 
+  CalendarDays, 
+  Clock, 
+  ShieldCheck,
   TrendingUp,
-  Clock
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,14 +27,9 @@ export const AdminUserDetails: React.FC<AdminUserDetailsProps> = ({
   onBack,
   onImpersonateUser
 }) => {
-  const completionRate =
-    user.tasksCreated > 0 ? Math.round((user.tasksCompleted / user.tasksCreated) * 100) : 0;
-
-  const isActiveRecent =
-    user.lastActivity && new Date(user.lastActivity) >= new Date(Date.now() - 7 * 86400000);
-
   return (
     <div className="space-y-6">
+      {/* Top Header Navigation */}
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
@@ -51,6 +49,7 @@ export const AdminUserDetails: React.FC<AdminUserDetailsProps> = ({
         </Button>
       </div>
 
+      {/* User Overview Profile Card */}
       <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 text-white space-y-4 shadow-2xl">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -66,21 +65,18 @@ export const AdminUserDetails: React.FC<AdminUserDetailsProps> = ({
           <div className="flex items-center gap-4 bg-slate-950 px-4 py-2.5 rounded-2xl border border-slate-800 text-xs">
             <div>
               <span className="text-slate-500 font-mono block text-[10px]">Registered On</span>
-              <span className="font-bold text-slate-200">
-                {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Unknown"}
-              </span>
+              <span className="font-bold text-slate-200">{new Date(user.createdAt).toLocaleDateString()}</span>
             </div>
             <div className="h-6 w-px bg-slate-800" />
             <div>
               <span className="text-slate-500 font-mono block text-[10px]">Last Session</span>
-              <span className="font-bold text-emerald-400">
-                {user.lastActivity ? new Date(user.lastActivity).toLocaleDateString() : "Never"}
-              </span>
+              <span className="font-bold text-emerald-400">{new Date(user.lastActivity).toLocaleDateString()}</span>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Activity Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-slate-900/80 border-slate-800 text-white rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -91,9 +87,7 @@ export const AdminUserDetails: React.FC<AdminUserDetailsProps> = ({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-extrabold font-mono text-emerald-300">{user.tasksCreated}</div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              {user.tasksCompleted} marked 100% complete ({completionRate}% rate)
-            </p>
+            <p className="text-[11px] text-slate-400 mt-1">{user.tasksCompleted} marked 100% complete</p>
           </CardContent>
         </Card>
 
@@ -119,29 +113,56 @@ export const AdminUserDetails: React.FC<AdminUserDetailsProps> = ({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-extrabold font-mono text-amber-300">{user.calendarEvents} Events</div>
-            <p className="text-[11px] text-slate-400 mt-1">Timetable classes and task deadlines</p>
+            <p className="text-[11px] text-slate-400 mt-1">Timetable classes & task deadlines</p>
           </CardContent>
         </Card>
 
         <Card className="bg-slate-900/80 border-slate-800 text-white rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Activity Status
+              Procrastination Risk
             </CardTitle>
             <TrendingUp className="w-4 h-4 text-rose-400" />
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-1.5 text-xs text-slate-300">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              {isActiveRecent ? "Active" : "Inactive past 7 days"}
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              {user.lastActivity
-                ? `Last active ${new Date(user.lastActivity).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
-                : "No recorded activity yet"}
-            </p>
+            <div className="text-2xl font-extrabold font-mono text-rose-300">28 / 100</div>
+            <p className="text-[11px] text-slate-400 mt-1">Low compounding debt score</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Deep-Dive Activity History Feed */}
+      <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <Clock className="w-4 h-4 text-purple-400" />
+          Recent Account Events & Product Analytics
+        </h3>
+
+        <div className="space-y-3 text-xs">
+          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div>
+              <span className="font-bold text-white block">Completed 25-min Focus Sprint in Physics</span>
+              <span className="text-[11px] text-slate-400">Wave Optics & Double Slit Practice</span>
+            </div>
+            <span className="font-mono text-slate-500 text-[10px]">Today, 10:15 AM</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div>
+              <span className="font-bold text-emerald-400 block">Marked Task "Chemistry Diagram" Completed</span>
+              <span className="text-[11px] text-slate-400">Completed 2 hours before submission deadline</span>
+            </div>
+            <span className="font-mono text-slate-500 text-[10px]">Yesterday, 6:30 PM</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div>
+              <span className="font-bold text-amber-300 block">Logged Evidence Case File Entry</span>
+              <span className="text-[11px] text-slate-400">Rating: 5 Stars (Prediction matched outcome)</span>
+            </div>
+            <span className="font-mono text-slate-500 text-[10px]">2 days ago</span>
+          </div>
+        </div>
       </div>
     </div>
   );
