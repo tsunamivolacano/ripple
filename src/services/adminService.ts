@@ -14,7 +14,6 @@ export function isAuthorizedAdmin(email?: string | null): boolean {
   return email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
 }
 
-// Local registry key for tracking all accounts created across sessions
 const REGISTERED_USERS_REGISTRY_KEY = 'ripple_registered_users_registry';
 
 export function getStoredRegisteredUsers(): AdminUserSummary[] {
@@ -29,7 +28,46 @@ export function getStoredRegisteredUsers(): AdminUserSummary[] {
   return [];
 }
 
+export async function syncUserProfileToSupabase(userId: string, email: string, name?: string) {
+  if (!email || email.includes('@demo.ripple')) return; // Skip demo accounts
+  
+  const cleanEmail = email.toLowerCase().trim();
+  const isOwner = cleanEmail === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
+  const userName = name || cleanEmail.split('@')[0];
+
+  try {
+    // Upsert into Supabase public profiles table so all admins can view this user
+    const { error } = await supabase.from('profiles').upsert(
+      {
+        user_id: userId,
+        email: cleanEmail,
+        first_name: userName,
+        role: isOwner ? 'admin' : 'student',
+        last_activity: new Date().toISOString()
+      },
+      { onConflict: 'email' }
+    );
+
+    if (error) {
+      // Secondary attempt without onConflict specification if schema varies
+      await supabase.from('profiles').insert([
+        {
+          user_id: userId,
+          email: cleanEmail,
+          first_name: userName,
+          role: isOwner ? 'admin' : 'student',
+          last_activity: new Date().toISOString()
+        }
+      ]);
+    }
+  } catch (err) {
+    console.warn('[adminService] Error syncing user profile to Supabase:', err);
+  }
+}
+
 export function registerUserInRegistry(user: { id: string; email: string; name?: string; role?: 'admin' | 'student' }) {
+  if (!user.email || user.email.includes('@demo.ripple')) return; // Exclude demo personas from Admin Dashboard
+
   try {
     const existing = getStoredRegisteredUsers();
     const existingIdx = existing.findIndex((u) => u.email.toLowerCase() === user.email.toLowerCase());
@@ -38,7 +76,7 @@ export function registerUserInRegistry(user: { id: string; email: string; name?:
 
     const entry: AdminUserSummary = {
       id: user.id,
-      email: user.email,
+      email: user.email.toLowerCase(),
       name: user.name || (isOwner ? 'Shanniddhya (App Owner & Admin)' : user.email.split('@')[0]),
       createdAt: existingIdx >= 0 ? existing[existingIdx].createdAt : new Date().toISOString(),
       lastActivity: new Date().toISOString(),
@@ -58,16 +96,8 @@ export function registerUserInRegistry(user: { id: string; email: string; name?:
 
     localStorage.setItem(REGISTERED_USERS_REGISTRY_KEY, JSON.stringify(existing));
 
-    // Also sync to Supabase public profiles table
-    supabase.from('profiles').upsert({
-      user_id: user.id,
-      email: user.email,
-      first_name: entry.name,
-      role: entry.role,
-      last_activity: new Date().toISOString()
-    }, { onConflict: 'user_id' }).then(({ error }) => {
-      if (error) console.warn('[adminService] Supabase profile upsert warning:', error.message);
-    });
+    // Sync to remote Supabase profiles database
+    syncUserProfileToSupabase(user.id, user.email, entry.name);
   } catch (e) {
     console.warn('[adminService] Could not update registered user store:', e);
   }
@@ -123,7 +153,7 @@ export async function fetchAdminOverview(): Promise<{
       }
     }
   } catch (e) {
-    console.warn('[adminService] Edge function overview fetch error, using live combined metrics:', e);
+    console.warn('[adminService] Edge function overview fetch warning:', e);
   }
 
   return {
@@ -159,11 +189,11 @@ export async function fetchAdminOverview(): Promise<{
   };
 }
 
-// Fetch All Registered Users List (combining Supabase DB profiles, Edge API, and Registry)
+// Fetch All Registered Users List (combining Supabase DB profiles, Edge API, and Local Registry)
 export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
   const userMap = new Map<string, AdminUserSummary>();
 
-  // Default owner entry
+  // Always include primary App Owner
   const ownerEntry: AdminUserSummary = {
     id: 'usr_admin',
     email: AUTHORIZED_ADMIN_EMAIL,
@@ -179,62 +209,23 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
   };
   userMap.set(AUTHORIZED_ADMIN_EMAIL.toLowerCase(), ownerEntry);
 
-  // Default demo personas for reference
-  const demoUsers: AdminUserSummary[] = [
-    {
-      id: 'demo_riya',
-      email: 'riya@demo.ripple',
-      name: 'Riya Verma (Class 11 Student)',
-      createdAt: new Date(Date.now() - 3600000 * 24 * 14).toISOString(),
-      lastActivity: new Date(Date.now() - 3600000 * 2).toISOString(),
-      tasksCreated: 18,
-      tasksCompleted: 14,
-      studyHours: '28.0',
-      timerSessions: 32,
-      calendarEvents: 12,
-      role: 'student'
-    },
-    {
-      id: 'demo_aman',
-      email: 'aman@demo.ripple',
-      name: 'Aman Verma (Product Analyst)',
-      createdAt: new Date(Date.now() - 3600000 * 24 * 20).toISOString(),
-      lastActivity: new Date(Date.now() - 3600000 * 4).toISOString(),
-      tasksCreated: 24,
-      tasksCompleted: 19,
-      studyHours: '34.5',
-      timerSessions: 41,
-      calendarEvents: 18,
-      role: 'student'
-    },
-    {
-      id: 'demo_kabir',
-      email: 'kabir@demo.ripple',
-      name: 'Kabir Mehta (Class 7 Student)',
-      createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
-      lastActivity: new Date(Date.now() - 3600000 * 8).toISOString(),
-      tasksCreated: 12,
-      tasksCompleted: 10,
-      studyHours: '16.2',
-      timerSessions: 18,
-      calendarEvents: 8,
-      role: 'student'
-    }
-  ];
-
-  demoUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+  // NOTE: Demo personas (Riya Verma, Aman Verma, Kabir Mehta) are excluded so only real users appear!
 
   // 1. Fetch from local stored registry
   const stored = getStoredRegisteredUsers();
-  stored.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+  stored.forEach((u) => {
+    if (u.email && !u.email.includes('@demo.ripple')) {
+      userMap.set(u.email.toLowerCase(), u);
+    }
+  });
 
-  // 2. Query Supabase public.profiles table directly
+  // 2. Query Supabase public.profiles table directly (accessible by all clients)
   try {
     const { data: dbProfiles } = await supabase.from('profiles').select('*');
     if (dbProfiles && dbProfiles.length > 0) {
       dbProfiles.forEach((p) => {
-        const emailKey = (p.email || '').toLowerCase();
-        if (emailKey) {
+        const emailKey = (p.email || '').toLowerCase().trim();
+        if (emailKey && !emailKey.includes('@demo.ripple')) {
           const isOwner = emailKey === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
           const existing = userMap.get(emailKey);
           userMap.set(emailKey, {
@@ -254,10 +245,10 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
       });
     }
   } catch (e) {
-    console.warn('[adminService] Supabase profiles table query error:', e);
+    console.warn('[adminService] Direct Supabase profiles query warning:', e);
   }
 
-  // 3. Query Edge Function admin API
+  // 3. Query Edge Function admin API if session token is available
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
@@ -272,20 +263,22 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
         const json = await response.json();
         if (json.users && Array.isArray(json.users)) {
           json.users.forEach((u: AdminUserSummary) => {
-            const emailKey = u.email.toLowerCase();
-            const existing = userMap.get(emailKey);
-            userMap.set(emailKey, {
-              ...existing,
-              ...u,
-              name: existing?.name || u.name,
-              role: emailKey === AUTHORIZED_ADMIN_EMAIL.toLowerCase() ? 'admin' : u.role
-            });
+            const emailKey = (u.email || '').toLowerCase().trim();
+            if (emailKey && !emailKey.includes('@demo.ripple')) {
+              const existing = userMap.get(emailKey);
+              userMap.set(emailKey, {
+                ...existing,
+                ...u,
+                name: existing?.name || u.name,
+                role: emailKey === AUTHORIZED_ADMIN_EMAIL.toLowerCase() ? 'admin' : u.role
+              });
+            }
           });
         }
       }
     }
   } catch (e) {
-    console.warn('[adminService] Edge function user list fetch error:', e);
+    console.warn('[adminService] Edge function user list fetch warning:', e);
   }
 
   return Array.from(userMap.values());

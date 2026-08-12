@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { safeGetStorage, safeSetStorage, getLocalUserId } from '@/utils/storageUtils';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
-import { registerUserInRegistry } from '@/services/adminService';
+import { registerUserInRegistry, syncUserProfileToSupabase } from '@/services/adminService';
 import { showSuccess } from '@/utils/toast';
 
 export interface UserAccount {
@@ -34,6 +34,7 @@ export function useRippleAuth() {
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
         registerUserInRegistry({ id: acc.id, email: acc.email });
+        syncUserProfileToSupabase(acc.id, acc.email);
       }
     });
 
@@ -47,6 +48,7 @@ export function useRippleAuth() {
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
         registerUserInRegistry({ id: acc.id, email: acc.email });
+        syncUserProfileToSupabase(acc.id, acc.email);
       }
     });
 
@@ -74,6 +76,7 @@ export function useRippleAuth() {
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
         registerUserInRegistry({ id: acc.id, email: acc.email });
+        syncUserProfileToSupabase(acc.id, acc.email);
         showSuccess(`Signed in as ${cleanEmail}`);
         return { success: true };
       }
@@ -91,6 +94,7 @@ export function useRippleAuth() {
     setCurrentUser(localAcc);
     safeSetStorage('ripple_active_user', localAcc);
     registerUserInRegistry({ id: localAcc.id, email: localAcc.email });
+    syncUserProfileToSupabase(localAcc.id, localAcc.email);
     showSuccess(`Signed in as ${cleanEmail}`);
     return { success: true };
   };
@@ -116,6 +120,7 @@ export function useRippleAuth() {
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
         registerUserInRegistry({ id: acc.id, email: acc.email });
+        syncUserProfileToSupabase(acc.id, acc.email);
         showSuccess(`Account created & signed in!`);
         return { success: true };
       }
@@ -133,6 +138,7 @@ export function useRippleAuth() {
     setCurrentUser(localAcc);
     safeSetStorage('ripple_active_user', localAcc);
     registerUserInRegistry({ id: localAcc.id, email: localAcc.email });
+    syncUserProfileToSupabase(localAcc.id, localAcc.email);
     showSuccess(`Account created & signed in!`);
     return { success: true };
   };
@@ -147,7 +153,6 @@ export function useRippleAuth() {
     };
     setCurrentUser(account);
     safeSetStorage('ripple_active_user', account);
-    registerUserInRegistry({ id: account.id, email: account.email, name: persona.name });
     showSuccess(`Viewing Demo Persona: ${persona.name}`);
   };
 

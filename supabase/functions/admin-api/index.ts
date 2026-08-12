@@ -68,7 +68,7 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || 'overview';
 
-    // Query profiles table
+    // Query public.profiles table
     const { data: profiles } = await adminClient.from('profiles').select('*');
 
     // Query Auth Admin users
@@ -80,7 +80,6 @@ serve(async (req) => {
       console.warn("[admin-api] Could not list auth users directly:", e);
     }
 
-    // Merge profiles and auth users
     const userMap = new Map<string, any>();
 
     // Add owner entry
@@ -100,8 +99,8 @@ serve(async (req) => {
 
     if (profiles && Array.isArray(profiles)) {
       profiles.forEach((p) => {
-        if (p.email) {
-          const emailKey = p.email.toLowerCase();
+        if (p.email && !p.email.includes('@demo.ripple')) {
+          const emailKey = p.email.toLowerCase().trim();
           userMap.set(emailKey, {
             id: p.user_id || p.id,
             email: p.email,
@@ -120,8 +119,8 @@ serve(async (req) => {
     }
 
     authUsers.forEach((u) => {
-      if (u.email) {
-        const emailKey = u.email.toLowerCase();
+      if (u.email && !u.email.includes('@demo.ripple')) {
+        const emailKey = u.email.toLowerCase().trim();
         const existing = userMap.get(emailKey);
         userMap.set(emailKey, {
           id: u.id,
