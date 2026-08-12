@@ -1,6 +1,5 @@
 import { supabase, getCurrentUserId } from './supabase';
 
-// Generic CRUD with mandatory user scoping
 export const dataService = {
   async fetchUserData<T>(
     table: string,
@@ -59,7 +58,7 @@ export const dataService = {
       .from(table)
       .update(updates)
       .eq('id', id)
-      .eq('user_id', userId) // Critical: ownership check
+      .eq('user_id', userId)
       .select()
       .single();
 
@@ -75,7 +74,7 @@ export const dataService = {
       .from(table)
       .delete()
       .eq('id', id)
-      .eq('user_id', userId); // Critical: ownership check
+      .eq('user_id', userId);
 
     if (error) throw error;
   }

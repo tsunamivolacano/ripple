@@ -20,13 +20,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user ?? null);
@@ -53,11 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (error) throw error;
 
-    // Create profile record
     if (data.user) {
       const { error: profileError } = await supabase
         .from('profiles')
-      .insert([{ 
+        .insert([{ 
           id: data.user.id, 
           email: data.user.email,
           full_name: fullName || null 

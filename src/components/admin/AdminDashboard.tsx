@@ -22,13 +22,11 @@ export function AdminDashboard() {
       setLoading(true);
       setError(null);
 
-      // Get current user to verify admin status
       const currentUser = await getCurrentUser();
       if (!currentUser) {
         throw new Error('Not authenticated');
       }
 
-      // Fetch all profiles with auth data
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
@@ -36,15 +34,12 @@ export function AdminDashboard() {
 
       if (profilesError) throw profilesError;
 
-      // Fetch auth users (requires admin privileges)
       const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
 
       if (authError) {
         console.warn('Could not fetch auth users:', authError);
-        // Fallback to profiles only
         setUsers(profiles || []);
       } else {
-        // Merge auth users with profiles
         const mergedUsers = authUsers.users.map(authUser => {
           const profile = profiles?.find(p => p.id === authUser.id);
           return {
@@ -70,7 +65,6 @@ export function AdminDashboard() {
   useEffect(() => {
     fetchAllUsers();
 
-    // Set up real-time subscription for new users
     const subscription = supabase
       .channel('admin-users-changes')
       .on('postgres_changes', 

@@ -26,7 +26,7 @@ export function useUserData<T>(
       let query = supabase
         .from(table)
         .select(options?.select || '*')
-        .eq('user_id', userId); // CRITICAL: Always scope to current user
+        .eq('user_id', userId);
 
       if (options?.filter) {
         Object.entries(options.filter).forEach(([key, value]) => {
@@ -56,7 +56,6 @@ export function useUserData<T>(
     fetchData();
   }, [fetchData]);
 
-  // CRUD operations with user isolation
   const create = useCallback(async (newData: Partial<T>) => {
     try {
       const userId = await getCurrentUserId();
@@ -86,7 +85,7 @@ export function useUserData<T>(
         .from(table)
         .update(updates)
         .eq('id', id)
-        .eq('user_id', userId) // CRITICAL: Ensure ownership
+        .eq('user_id', userId)
         .select()
         .single();
 
@@ -108,7 +107,7 @@ export function useUserData<T>(
         .from(table)
         .delete()
         .eq('id', id)
-        .eq('user_id', userId); // CRITICAL: Ensure ownership
+        .eq('user_id', userId);
 
       if (error) throw error;
       await fetchData();

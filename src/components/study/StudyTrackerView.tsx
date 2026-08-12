@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 
-// Types
 interface StudySession {
   id: string;
   user_id: string;
@@ -20,7 +19,6 @@ interface StudyStats {
   subjects: Record<string, number>;
 }
 
-// Utility functions
 const calculateStats = (sessions: StudySession[]): StudyStats => {
   const totalSessions = sessions.length;
   const totalMinutes = sessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
@@ -34,7 +32,6 @@ const calculateStats = (sessions: StudySession[]): StudyStats => {
   return { totalSessions, totalMinutes, averageDuration, subjects };
 };
 
-// Sub-components
 function StudyStats({ stats }: { stats: StudyStats }) {
   return (
     <div className="study-stats">
@@ -139,7 +136,6 @@ function SessionList({ sessions, onDelete }: {
   );
 }
 
-// Main Component
 export function StudyTrackerView() {
   const [showForm, setShowForm] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -163,7 +159,6 @@ export function StudyTrackerView() {
     loadUser();
   }, []);
 
-  // Real-time subscription for session updates
   useEffect(() => {
     if (!userId) return;
 
@@ -174,7 +169,7 @@ export function StudyTrackerView() {
           event: '*', 
           schema: 'public', 
           table: 'study_sessions',
-          filter: `user_id=eq.${userId}` // CRITICAL: Only listen to own changes
+          filter: `user_id=eq.${userId}`
         },
         () => refetch()
       )
