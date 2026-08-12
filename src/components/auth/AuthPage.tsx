@@ -239,7 +239,7 @@ export const AuthPage: React.FC = () => {
                 ))}
               </div>
             </CardContent>
-          </Card>
+          </Tabs>
         </Card>
 
         <p className="text-[11px] text-center text-slate-500 flex items-center justify-center gap-1.5">
