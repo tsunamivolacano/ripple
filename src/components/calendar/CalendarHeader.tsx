@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export type ViewMode = 'month' | 'week' | 'day';
-export type FilterType = 'all' | 'tasks' | 'classes';
+export type FilterType = 'all' | 'exams' | 'assignments' | 'study_sessions' | 'classes';
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -55,7 +55,7 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
               </Badge>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Synced with your device local date, deadlines, and weekly schedule.
+              Exams, tests, assignments, study sessions, and weekly class schedule.
             </p>
           </div>
         </div>
@@ -119,25 +119,27 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
             className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs gap-1.5 h-9"
           >
             <Plus className="w-4 h-4" />
-            New Event
+            Add Event / Exam
           </Button>
         </div>
       </div>
 
       {/* Filter Options */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
         <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 mr-1">
           <Filter className="w-3.5 h-3.5" /> Filter:
         </span>
         {[
           { id: 'all', label: 'All Activities' },
-          { id: 'tasks', label: 'Tasks & Deadlines' },
-          { id: 'classes', label: 'Classes & Timetable' }
+          { id: 'exams', label: '🏆 Exams & Tests' },
+          { id: 'assignments', label: '📄 Assignments & Deadlines' },
+          { id: 'study_sessions', label: '📚 Study Sessions' },
+          { id: 'classes', label: '🎓 Classes & Timetable' }
         ].map((f) => (
           <button
             key={f.id}
             onClick={() => onFilterTypeChange(f.id as FilterType)}
-            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               filterType === f.id
                 ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
                 : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'

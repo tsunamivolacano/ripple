@@ -15,7 +15,10 @@ import {
   CheckSquare,
   Bell,
   Trash2,
-  BookOpen
+  BookOpen,
+  Trophy,
+  FileText,
+  Clock
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,11 +40,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const theme = getStatusTheme(task.status);
   const timeInfo = getTimeRemaining(task.dueDate);
 
-  const isPersonal = task.category === 'personal' || !slot || ['personal', 'meeting', 'appointment', 'reminder', 'event', 'chore', 'self_study'].includes(task.taskType);
-
   // Helper icon for task type
   const getTypeBadge = () => {
     switch (task.taskType) {
+      case 'exam':
+        return { label: 'Major Exam', icon: Trophy, color: 'bg-rose-500/20 text-rose-300 border-rose-500/50 font-bold' };
+      case 'test':
+        return { label: 'Class Test', icon: Trophy, color: 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold' };
+      case 'assignment':
+        return { label: 'Assignment', icon: FileText, color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' };
+      case 'deadline':
+        return { label: 'Deadline', icon: Clock, color: 'bg-purple-500/20 text-purple-300 border-purple-500/40' };
+      case 'study_session':
+        return { label: 'Study Session', icon: BookOpen, color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' };
       case 'self_study':
         return { label: 'Self-Study', icon: BookOpen, color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' };
       case 'meeting':
@@ -73,30 +84,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <div>
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+              {typeBadge && (
+                <Badge variant="outline" className={`${typeBadge.color} text-[11px] gap-1 px-2 py-0.5`}>
+                  <typeBadge.icon className="w-3 h-3" />
+                  {typeBadge.label}
+                </Badge>
+              )}
+
               <Badge className={theme.badge}>
-                {task.hasDeadline === false ? 'Flexible Activity' : theme.label}
+                {task.hasDeadline === false ? 'Self-Paced' : theme.label}
               </Badge>
 
-              {slot ? (
+              {slot && (
                 <Badge variant="outline" className="bg-slate-900/80 text-slate-300 border-slate-700 text-[11px] gap-1">
                   <GraduationCap className="w-3 h-3 text-indigo-400" />
                   {slot.subject}
                 </Badge>
-              ) : typeBadge ? (
-                <Badge variant="outline" className={`${typeBadge.color} text-[11px] gap-1`}>
-                  <typeBadge.icon className="w-3 h-3" />
-                  {typeBadge.label}
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-slate-900/80 text-slate-300 border-slate-700 text-[11px] gap-1">
-                  <User className="w-3 h-3 text-indigo-400" />
-                  General
-                </Badge>
               )}
             </div>
 
-            <h3 className="text-base font-bold text-white group-hover:text-rose-200 transition-colors line-clamp-2">
+            <h3 className="text-base font-extrabold text-white group-hover:text-rose-200 transition-colors line-clamp-2">
               {task.title}
             </h3>
           </div>
@@ -120,6 +128,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             </div>
           )}
         </div>
+
+        {/* Syllabus / Topics snippet if available */}
+        {task.syllabus && (
+          <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-xs mb-3 space-y-0.5">
+            <span className="text-[10px] font-bold text-indigo-300 uppercase flex items-center gap-1">
+              <BookOpen className="w-3 h-3 text-indigo-400" /> Syllabus / Topics
+            </span>
+            <p className="text-slate-200 line-clamp-2 text-[11px]">
+              {task.syllabus}
+            </p>
+          </div>
+        )}
 
         {/* Task description */}
         {task.description && (
@@ -155,7 +175,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <span>Timing:</span>
             <span className="text-slate-200 font-bold">
               {task.hasDeadline !== false && task.dueDate
-                ? new Date(task.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                ? new Date(task.dueDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
                 : 'Flexible Self-Study'}
             </span>
           </div>

@@ -9,7 +9,8 @@ import {
   Trash2, 
   BarChart3, 
   CheckCircle2,
-  Calendar
+  Calendar,
+  AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export const StudyTrackerView: React.FC = () => {
   const { studyLogs, slots, addStudyLog, deleteStudyLog } = useRipple();
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [deletingSubject, setDeletingSubject] = useState<string | null>(null);
 
   // Form states
   const [selectedSubject, setSelectedSubject] = useState<string>('');
@@ -66,6 +68,12 @@ export const StudyTrackerView: React.FC = () => {
     setIsLogModalOpen(false);
   };
 
+  const handleClearSubjectLogs = (subjectName: string) => {
+    const logsToDelete = studyLogs.filter((l) => l.subject === subjectName);
+    logsToDelete.forEach((l) => deleteStudyLog(l.id));
+    setDeletingSubject(null);
+  };
+
   // Calculations
   const totalStudyMinutes = studyLogs.reduce((acc, log) => acc + log.durationMinutes, 0);
   const totalHours = Math.floor(totalStudyMinutes / 60);
@@ -94,7 +102,7 @@ export const StudyTrackerView: React.FC = () => {
             Subject-Wise Study Log
           </h2>
           <p className="text-xs text-slate-400 max-w-lg">
-            Track actual time spent reading, practicing, and revising subjects completely separate from tasks and deadlines.
+            Track actual time spent reading, practicing, and revising subjects. You can delete or manage any logged session at any time.
           </p>
         </div>
 
@@ -138,11 +146,12 @@ export const StudyTrackerView: React.FC = () => {
                 const hrs = Math.floor(minutes / 60);
                 const mins = minutes % 60;
                 const percentage = totalStudyMinutes > 0 ? Math.round((minutes / totalStudyMinutes) * 100) : 0;
+                const logCount = studyLogs.filter((l) => l.subject === subject).length;
 
                 return (
                   <div
                     key={subject}
-                    className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3 hover:border-slate-700 transition-all"
+                    className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3 hover:border-slate-700 transition-all relative group"
                   >
                     <div className="flex items-start justify-between">
                       <div>
@@ -150,10 +159,23 @@ export const StudyTrackerView: React.FC = () => {
                         <span className="text-xs font-mono text-indigo-300 font-bold">
                           {hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`}
                         </span>
+                        <span className="text-[10px] text-slate-500 font-mono block">
+                          {logCount} log entry{logCount !== 1 ? 'ies' : ''}
+                        </span>
                       </div>
-                      <Badge variant="outline" className="border-indigo-500/30 text-indigo-300 bg-indigo-950/40 text-[10px]">
-                        {percentage}% of total
-                      </Badge>
+
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="border-indigo-500/30 text-indigo-300 bg-indigo-950/40 text-[10px]">
+                          {percentage}%
+                        </Badge>
+                        <button
+                          onClick={() => setDeletingSubject(subject)}
+                          className="text-slate-500 hover:text-rose-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title={`Clear all ${subject} study logs`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="w-full h-2 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
@@ -184,6 +206,7 @@ export const StudyTrackerView: React.FC = () => {
               <Clock className="w-4 h-4 text-emerald-400" />
               Recent Log Stream
             </h3>
+            <span className="text-[10px] text-slate-400">Click Trash to delete</span>
           </div>
 
           {studyLogs.length > 0 ? (
@@ -196,9 +219,9 @@ export const StudyTrackerView: React.FC = () => {
                 return (
                   <div
                     key={log.id}
-                    className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1.5 relative group"
+                    className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1.5 relative group hover:border-slate-700 transition-all"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between pr-6">
                       <span className="text-xs font-bold text-white">{log.subject}</span>
                       <span className="text-xs font-mono font-extrabold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
                         +{formattedDuration}
@@ -216,14 +239,15 @@ export const StudyTrackerView: React.FC = () => {
                         Source: {log.source === 'timer' ? '⏱️ Focus Sprint' : '✍️ Manual Entry'}
                       </span>
                       <span>
+                        {new Date(log.loggedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}{' '}
                         {new Date(log.loggedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
 
                     <button
                       onClick={() => deleteStudyLog(log.id)}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-rose-400 p-1"
-                      title="Delete Entry"
+                      className="absolute top-2.5 right-2 text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 transition-all"
+                      title="Delete Study Entry"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -330,6 +354,33 @@ export const StudyTrackerView: React.FC = () => {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Modal to Clear Subject Logs */}
+      <Dialog open={!!deletingSubject} onOpenChange={() => setDeletingSubject(null)}>
+        <DialogContent className="bg-slate-950 border-rose-500/40 text-white max-w-sm rounded-2xl p-5">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-rose-400">
+              <AlertCircle className="w-4 h-4" />
+              Clear all {deletingSubject} study logs?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-slate-400 my-2">
+            This will remove all study session entries recorded for <strong>{deletingSubject}</strong>.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setDeletingSubject(null)} className="text-xs text-slate-400">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => deletingSubject && handleClearSubjectLogs(deletingSubject)}
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold"
+            >
+              Clear Logs
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

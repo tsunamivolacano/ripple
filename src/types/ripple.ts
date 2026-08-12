@@ -19,6 +19,11 @@ export type IntensityMode = 'coach' | 'standard' | 'doomsday';
 export type TaskStatus = 'manageable' | 'tight' | 'critical' | 'too_late' | 'completed' | 'renegotiated';
 
 export type TaskType = 
+  | 'exam'
+  | 'test'
+  | 'assignment'
+  | 'deadline'
+  | 'study_session'
   | 'essay' 
   | 'lab_report' 
   | 'reading' 
@@ -69,6 +74,7 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
+  syllabus?: string; // Exam syllabus / topics to cover
   slotId?: string;
   hasDeadline?: boolean;
   dueDate?: string; // ISO String in UTC
