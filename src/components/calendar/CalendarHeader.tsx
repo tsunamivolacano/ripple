@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export type ViewMode = 'month' | 'week' | 'day';
-export type FilterType = 'all' | 'exams' | 'assignments' | 'study_sessions' | 'classes' | 'study_logs';
+export type FilterType = 'all' | 'exams' | 'assignments' | 'study_sessions' | 'classes' | 'study_logs' | 'tasks';
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -38,7 +38,6 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      {/* Navigation Toolbar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
@@ -60,9 +59,7 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
           </div>
         </div>
 
-        {/* Action Controls & Navigation */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Navigation Buttons */}
           <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
             <Button
               variant="ghost"
@@ -96,7 +93,6 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
             {currentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
           </span>
 
-          {/* View Switcher Tabs */}
           <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
             {(['month', 'week', 'day'] as ViewMode[]).map((mode) => (
               <button
@@ -124,7 +120,6 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
         </div>
       </div>
 
-      {/* Filter Options */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
         <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 mr-1">
           <Filter className="w-3.5 h-3.5" /> Filter:
@@ -135,7 +130,8 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
           { id: 'assignments', label: '📄 Assignments & Deadlines' },
           { id: 'study_sessions', label: '📚 Study Goals' },
           { id: 'study_logs', label: '⏱️ Logged Study Time' },
-          { id: 'classes', label: '🎓 Classes & Timetable' }
+          { id: 'classes', label: '🎓 Classes & Timetable' },
+          { id: 'tasks', label: '📋 All Tasks' }
         ].map((f) => (
           <button
             key={f.id}

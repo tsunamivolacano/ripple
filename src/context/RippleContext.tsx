@@ -3,8 +3,8 @@ import { useRippleAuth } from '@/hooks/useRippleAuth';
 import { useRippleData } from '@/hooks/useRippleData';
 import { isAuthorizedAdmin } from '@/services/adminService';
 import type { AdminUserSummary } from '@/types/admin';
+import type { TaskStatus } from '@/types/ripple';
 
-// Create context
 interface RippleContextType {
   // Auth
   currentUser: ReturnType<typeof useRippleAuth>['currentUser'];
@@ -20,6 +20,17 @@ interface RippleContextType {
   impersonatedUser: AdminUserSummary | null;
   startImpersonatingUser: (user: AdminUserSummary) => void;
   exitImpersonatedUser: () => void;
+
+  // Tutorial
+  isTutorialOpen: boolean;
+  currentTutorialStep: number;
+  hasCompletedTutorial: boolean;
+  setHasCompletedTutorial: (v: boolean) => void;
+  startTutorial: () => void;
+  replayTutorial: () => void;
+  closeTutorial: () => void;
+  completeTutorial: () => void;
+  setTutorialStep: (step: number) => void;
 
   // Data hook spread
   slots: ReturnType<typeof useRippleData>['slots'];
@@ -65,6 +76,37 @@ export function RippleProvider({ children }: { children: React.ReactNode }) {
   const [isAdminView, setAdminView] = React.useState(false);
   const [impersonatedUser, setImpersonatedUser] = React.useState<AdminUserSummary | null>(null);
 
+  // Tutorial state from useRippleTutorial
+  const [isTutorialOpen, setIsTutorialOpen] = React.useState(false);
+  const [currentTutorialStep, setCurrentTutorialStep] = React.useState(0);
+  const [hasCompletedTutorial, setHasCompletedTutorial] = React.useState(false);
+
+  const startTutorial = () => {
+    setCurrentTutorialStep(0);
+    setIsTutorialOpen(true);
+  };
+
+  const replayTutorial = () => {
+    setCurrentTutorialStep(0);
+    setIsTutorialOpen(true);
+  };
+
+  const closeTutorial = () => {
+    setIsTutorialOpen(false);
+  };
+
+  const completeTutorial = () => {
+    setHasCompletedTutorial(true);
+    setIsTutorialOpen(false);
+    if (auth.currentUser && !auth.currentUser.isDemo) {
+      localStorage.setItem(`ripple_tutorial_completed_${auth.currentUser.id}`, 'true');
+    }
+  };
+
+  const setTutorialStep = (step: number) => {
+    setCurrentTutorialStep(step);
+  };
+
   const isAdmin = isAuthorizedAdmin(auth.currentUser?.email);
 
   const startImpersonatingUser = (user: AdminUserSummary) => {
@@ -85,7 +127,16 @@ export function RippleProvider({ children }: { children: React.ReactNode }) {
     setAdminView,
     impersonatedUser,
     startImpersonatingUser,
-    exitImpersonatedUser
+    exitImpersonatedUser,
+    isTutorialOpen,
+    currentTutorialStep,
+    hasCompletedTutorial,
+    setHasCompletedTutorial,
+    startTutorial,
+    replayTutorial,
+    closeTutorial,
+    completeTutorial,
+    setTutorialStep,
   };
 
   return <RippleContext.Provider value={value}>{children}</RippleContext.Provider>;

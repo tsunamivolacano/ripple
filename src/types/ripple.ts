@@ -46,27 +46,27 @@ export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly
 
 export interface RecurrenceRule {
   type: RecurrenceType;
-  interval?: number; // e.g. 1 = every week, 2 = every 2 weeks
+  interval?: number;
   daysOfWeek?: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
-  startDate?: string; // YYYY-MM-DD
-  endDate?: string;   // YYYY-MM-DD optional cutoff
-  count?: number;     // max occurrences
+  startDate?: string;
+  endDate?: string;
+  count?: number;
 }
 
 export interface TimetableSlot {
   id: string;
   subject: string;
   dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
-  startTime: string; // HH:mm
-  endTime: string;   // HH:mm
+  startTime: string;
+  endTime: string;
   room: string;
   teacherName: string;
   strictnessTag: StrictnessTag;
   stakesTag: StakesTag;
-  weight: number; // 1 to 100%
+  weight: number;
   reminders?: ReminderTiming[];
   recurrence?: RecurrenceRule;
-  specificDate?: string; // YYYY-MM-DD for single-occurrence / only-this-week class
+  specificDate?: string;
   notes?: string;
 }
 
@@ -74,10 +74,10 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  syllabus?: string; // Exam syllabus / topics to cover
+  syllabus?: string;
   slotId?: string;
   hasDeadline?: boolean;
-  dueDate?: string; // ISO String in UTC
+  dueDate?: string;
   estimatedHours: number;
   completionPercentage: number;
   taskType: TaskType;
@@ -88,6 +88,7 @@ export interface Task {
   completedAt?: string;
   renegotiatedCount?: number;
   lastRenegotiatedAt?: string;
+  status: TaskStatus;
 }
 
 export interface DomainConsequence {
@@ -95,14 +96,14 @@ export interface DomainConsequence {
   severity: 'low' | 'medium' | 'high' | 'severe';
   title: string;
   description: string;
-  impactScore: number; // 0 - 100
+  impactScore: number;
 }
 
 export interface SplitTimelineScenario {
   title: string;
   timeframe: string;
   outcomeSummary: string;
-  stressLevel: number; // 1 - 10
+  stressLevel: number;
   academicImpact: string;
   socialImpact: string;
   energyCost: string;
@@ -136,7 +137,7 @@ export interface EvidenceEntry {
   predictedScenario: string;
   actualOutcome: string;
   wasOnTime: boolean;
-  accuracyRating: number; // 1-5
+  accuracyRating: number;
   dateLogged: string;
   userNotes?: string;
 }
@@ -146,7 +147,7 @@ export interface StudyLog {
   subject: string;
   durationMinutes: number;
   topic?: string;
-  loggedAt: string; // ISO string
+  loggedAt: string;
   source: 'manual' | 'timer';
 }
 
@@ -154,7 +155,7 @@ export interface ProcrastinationDebt {
   totalHoursBehind: number;
   missedDeadlinesCount: number;
   streakDays: number;
-  compoundingScore: number; // calculated metric
+  compoundingScore: number;
   weeklyDebtTrend: { day: string; debtHours: number }[];
 }
 
@@ -172,7 +173,7 @@ export interface ScheduledNotification {
   itemType: 'task' | 'class' | 'overdue';
   title: string;
   body: string;
-  triggerTime: string; // ISO UTC
+  triggerTime: string;
   reminderOffset: ReminderTiming;
   status: 'pending' | 'sent' | 'cancelled';
   createdAt: string;
@@ -182,5 +183,5 @@ export interface UserSettings {
   intensityMode: IntensityMode;
   isMinorProfile: boolean;
   weeklyDigestOnly: boolean;
-  personalVelocityMultiplier: number; // e.g. 1.2x
+  personalVelocityMultiplier: number;
 }

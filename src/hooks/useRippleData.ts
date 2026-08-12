@@ -6,7 +6,8 @@ import {
   StudyLog,
   ProcrastinationDebt,
   UserSettings,
-  NotificationSettings
+  NotificationSettings,
+  TaskStatus
 } from "@/types/ripple";
 import { calculateTaskStatus } from "@/utils/timeUtils";
 import { safeGetStorage, safeSetStorage } from "@/utils/storageUtils";
@@ -100,7 +101,6 @@ export function useRippleData(currentUser: UserAccount | null) {
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
   const [isNotificationModalOpen, setNotificationModalOpen] = useState<boolean>(false);
 
-  // Live refs keep the latest values available inside persist/updaters
   const tasksRef = useRef<Task[]>([]);
   const studyRef = useRef<StudyLog[]>([]);
   const slotsRef = useRef<TimetableSlot[]>([]);
@@ -123,7 +123,6 @@ export function useRippleData(currentUser: UserAccount | null) {
     [currentUser]
   );
 
-  /** Persist a collection to Supabase + local cache (per-user scoped). */
   const persist = useCallback(
     async (kind: CollectionKey, value: any) => {
       if (!currentUser || currentUser.isDemo) return;
@@ -145,8 +144,6 @@ export function useRippleData(currentUser: UserAccount | null) {
     },
     [currentUser, localWrite]
   );
-
-  /* ------------------------------ Load ------------------------------ */
 
   useEffect(() => {
     if (!currentUser) {
@@ -194,10 +191,7 @@ export function useRippleData(currentUser: UserAccount | null) {
       setCurrentPersonaId("");
       setIsLoadingData(false);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id]);
-
-  /* --------------------------- Live status ticker --------------------------- */
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -217,8 +211,6 @@ export function useRippleData(currentUser: UserAccount | null) {
     }, 30000);
     return () => clearInterval(timer);
   }, [settings.personalVelocityMultiplier]);
-
-  /* ------------------------------ Mutations ------------------------------ */
 
   const addSlot = async (slotData: Omit<TimetableSlot, "id">) => {
     if (!currentUser) return;
