@@ -44,53 +44,6 @@ export interface RecurrenceRule {
   interval?: number; // e.g. 1 = every week, 2 = every 2 weeks
   daysOfWeek?: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
   startDate?: string; // YYYY-MM-DD
-  endDate?:<dyad-write path="src/types/ripple.ts" description="Complete ripple.ts file with Task interface containing status property">
-export type StrictnessTag = 
-  | 'COLD_CALL' 
-  | 'NOTEBOOK_CHECK' 
-  | 'ATTENDANCE_STRICT' 
-  | 'PUBLIC_SCOLD' 
-  | 'QUIET_TALK' 
-  | 'LENIENT';
-
-export type StakesTag = 
-  | 'GRADED_QUIZ' 
-  | 'ATTENDANCE' 
-  | 'PRESENTATION' 
-  | 'NOTEBOOK_COPY' 
-  | 'LAB_PRACTICAL' 
-  | 'HOMEWORK';
-
-export type IntensityMode = 'coach' | 'standard' | 'doomsday';
-
-export type TaskStatus = 'manageable' | 'tight' | 'critical' | 'too_late' | 'completed' | 'renegotiated';
-
-export type TaskType = 
-  | 'essay' 
-  | 'lab_report' 
-  | 'reading' 
-  | 'problem_set' 
-  | 'revision' 
-  | 'project'
-  | 'personal'
-  | 'meeting'
-  | 'appointment'
-  | 'reminder'
-  | 'event'
-  | 'chore'
-  | 'self_study';
-
-export type TaskCategory = 'academic' | 'personal';
-
-export type ReminderTiming = 'exact' | '5m' | '15m' | '30m' | '1h' | '1d' | 'overdue';
-
-export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
-
-export interface RecurrenceRule {
-  type: RecurrenceType;
-  interval?: number; // e.g. 1 = every week, 2 = every 2 weeks
-  daysOfWeek?: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
-  startDate?: string; // YYYY-MM-DD
   endDate?: string;   // YYYY-MM-DD optional cutoff
   count?: number;     // max occurrences
 }
