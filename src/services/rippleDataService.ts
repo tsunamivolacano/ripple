@@ -47,7 +47,8 @@ const taskFromRow = (r: any): Task => ({
   createdAt: r.created_at,
   completedAt: r.completed_at ?? undefined,
   renegotiatedCount: r.renegotiated_count ?? 0,
-  lastRenegotiatedAt: r.last_renegotiated_at ?? undefined
+  lastRenegotiatedAt: r.last_renegotiated_at ?? undefined,
+  status: r.status ?? 'manageable'
 });
 
 const taskToRow = (t: Task, userId: string) => ({
@@ -67,7 +68,8 @@ const taskToRow = (t: Task, userId: string) => ({
   recurrence: t.recurrence ?? null,
   completed_at: t.completedAt ?? null,
   renegotiated_count: t.renegotiatedCount ?? 0,
-  last_renegotiated_at: t.lastRenegotiatedAt ?? null
+  last_renegotiated_at: t.lastRenegotiatedAt ?? null,
+  status: t.status
 });
 
 const slotFromRow = (r: any): TimetableSlot => ({
@@ -222,10 +224,6 @@ const ROW_SERIALIZERS: Record<CollectionKey, (value: any, userId: string) => any
 
 /* ------------------------------ Fetch ------------------------------ */
 
-/**
- * Fetch a single collection for a user. Returns null when the table is
- * unavailable or the query fails, allowing the caller to fall back to cache.
- */
 export async function fetchCollection(
   userId: string,
   kind: CollectionKey
@@ -258,10 +256,6 @@ export async function fetchCollection(
 
 /* ------------------------------ Persist ------------------------------ */
 
-/**
- * Persist a collection for a user. Arrays are diff-synced (delete rows no
- * longer present, upsert the rest). Single-row kinds are upserted by user_id.
- */
 export async function persistCollection(
   userId: string,
   kind: CollectionKey,
@@ -272,7 +266,6 @@ export async function persistCollection(
     const serialize = ROW_SERIALIZERS[kind];
 
     if (Array.isArray(value)) {
-      // Remove rows deleted locally
       const { data: existing, error: listErr } = await supabase
         .from(table)
         .select("id")
@@ -312,7 +305,6 @@ export async function persistCollection(
   }
 }
 
-/** Hard-delete every collection row for a user (used by reset). */
 export async function deleteAllUserData(userId: string): Promise<void> {
   const keys: CollectionKey[] = [
     "slots",
