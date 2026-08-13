@@ -107,4 +107,4 @@ export const AdminActivity: React.FC = () => {
       )}
     </div>
   );
-};
+}

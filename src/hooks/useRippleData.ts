@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   TimetableSlot, 
   Task, 
@@ -118,38 +119,93 @@ export function useRippleData(currentUser: UserAccount | null) {
       return;
     }
 
-    const localSlots = safeGetStorage<TimetableSlot[] | null>(`ripple_slots_${uKey}`, null);
-    const localTasks = safeGetStorage<Task[] | null>(`ripple_tasks_${uKey}`, null);
-    const localEvidence = safeGetStorage<EvidenceEntry[] | null>(`ripple_evidence_${uKey}`, null);
-    const localStudy = safeGetStorage<StudyLog[] | null>(`ripple_study_${uKey}`, null);
-    const localDebt = safeGetStorage<ProcrastinationDebt | null>(`ripple_debt_${uKey}`, null);
-    const localSettings = safeGetStorage<UserSettings | null>(`ripple_settings_${uKey}`, null);
-    const localNotifSettings = safeGetStorage<NotificationSettings | null>(`ripple_notif_settings_${uKey}`, null);
-
-    setSlots(localSlots !== null ? localSlots : []);
-    setTasks(localTasks !== null ? localTasks : []);
-    setEvidenceEntries(localEvidence !== null ? localEvidence : []);
-    setStudyLogs(localStudy !== null ? localStudy : initialStudyLogs);
-    setDebt(localDebt !== null ? localDebt : emptyDebt);
-    setSettings(localSettings !== null ? localSettings : emptySettings);
-    setNotificationSettings(localNotifSettings !== null ? localNotifSettings : defaultNotificationSettings);
-
-    setIsLoadingData(false);
+    // Load data from Supabase
+    loadUserDataFromSupabase(uKey);
   }, [currentUser?.id]);
 
-  // Sync changes to storage
-  useEffect(() => {
-    if (currentUser && !currentUser.isDemo) {
-      const uKey = currentUser.id;
-      safeSetStorage(`ripple_slots_${uKey}`, slots);
-      safeSetStorage(`ripple_tasks_${uKey}`, tasks);
-      safeSetStorage(`ripple_evidence_${uKey}`, evidenceEntries);
-      safeSetStorage(`ripple_study_${uKey}`, studyLogs);
-      safeSetStorage(`ripple_debt_${uKey}`, debt);
-      safeSetStorage(`ripple_settings_${uKey}`, settings);
-      safeSetStorage(`ripple_notif_settings_${uKey}`, notificationSettings);
+  const loadUserDataFromSupabase = async (userId: string) => {
+    try {
+      // Load slots (timetable)
+      const { data: slotsData } = await supabase
+        .from('timetable_slots')
+        .select('*')
+        .eq('user_id', userId);
+      
+      // Load tasks
+      const { data: tasksData } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      
+      // Load evidence entries
+      const { data: evidenceData } = await supabase
+        .from('evidence_entries')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date_logged', { ascending: false });
+      
+      // Load study logs
+      const { data: studyData } = await supabase
+        .from('study_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('logged_at', { ascending: false });
+      
+      // Load debt
+      const { data: debtData } = await supabase
+        .from('procrastination_debt')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      // Load settings
+      const { data: settingsData } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      // Load notification settings
+      const { data: notifSettingsData } = await supabase
+        .from('notification_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      // Set data (fallback to localStorage if Supabase fails)
+      setSlots(slotsData || []);
+      setTasks(tasksData || []);
+      setEvidenceEntries(evidenceData || []);
+      setStudyLogs(studyData || initialStudyLogs);
+      setDebt(debtData || emptyDebt);
+      setSettings(settingsData || emptySettings);
+      setNotificationSettings(notifSettingsData || defaultNotificationSettings);
+    } catch (e) {
+      console.warn('[useRippleData] Failed to load from Supabase, falling back to localStorage:', e);
+      // Fallback to localStorage
+      const uKey = currentUser?.id;
+      if (uKey) {
+        const localSlots = safeGetStorage<TimetableSlot[] | null>(`ripple_slots_${uKey}`, null);
+        const localTasks = safeGetStorage<Task[] | null>(`ripple_tasks_${uKey}`, null);
+        const localEvidence = safeGetStorage<EvidenceEntry[] | null>(`ripple_evidence_${uKey}`, null);
+        const localStudy = safeGetStorage<StudyLog[] | null>(`ripple_study_${uKey}`, null);
+        const localDebt = safeGetStorage<ProcrastinationDebt | null>(`ripple_debt_${uKey}`, null);
+        const localSettings = safeGetStorage<UserSettings | null>(`ripple_settings_${uKey}`, null);
+        const localNotifSettings = safeGetStorage<NotificationSettings | null>(`ripple_notif_settings_${uKey}`, null);
+
+        setSlots(localSlots !== null ? localSlots : []);
+        setTasks(localTasks !== null ? localTasks : []);
+        setEvidenceEntries(localEvidence !== null ? localEvidence : []);
+        setStudyLogs(localStudy !== null ? localStudy : initialStudyLogs);
+        setDebt(localDebt !== null ? localDebt : emptyDebt);
+        setSettings(localSettings !== null ? localSettings : emptySettings);
+        setNotificationSettings(localNotifSettings !== null ? localNotifSettings : defaultNotificationSettings);
+      }
+    } finally {
+      setIsLoadingData(false);
     }
-  }, [currentUser, slots, tasks, evidenceEntries, studyLogs, debt, settings, notificationSettings]);
+  };
 
   // Dynamic task status ticker
   useEffect(() => {
@@ -171,6 +227,31 @@ export function useRippleData(currentUser: UserAccount | null) {
     const updatedSlots = [...slots, newSlot];
     setSlots(updatedSlots);
 
+    // Save to Supabase
+    try {
+      await supabase
+        .from('timetable_slots')
+        .insert({
+          id: newSlot.id,
+          user_id: currentUser.id,
+          subject: newSlot.subject,
+          day_of_week: newSlot.dayOfWeek,
+          start_time: newSlot.startTime,
+          end_time: newSlot.endTime,
+          room: newSlot.room,
+          teacher_name: newSlot.teacherName,
+          strictness_tag: newSlot.strictnessTag,
+          stakes_tag: newSlot.stakesTag,
+          weight: newSlot.weight,
+          reminders: newSlot.reminders,
+          recurrence: newSlot.recurrence,
+          specific_date: newSlot.specificDate,
+          notes: newSlot.notes
+        });
+    } catch (e) {
+      console.warn('[useRippleData] Failed to save slot to Supabase:', e);
+    }
+
     ActivityLogger.slotAdded(currentUser.id, newSlot.id, newSlot.subject, {
       teacher: newSlot.teacherName,
       time: `${newSlot.startTime} - ${newSlot.endTime}`,
@@ -186,6 +267,31 @@ export function useRippleData(currentUser: UserAccount | null) {
     if (!currentUser) return;
     const updatedSlots = slots.map((s) => (s.id === updatedSlot.id ? updatedSlot : s));
     setSlots(updatedSlots);
+
+    // Save to Supabase
+    try {
+      await supabase
+        .from('timetable_slots')
+        .update({
+          subject: updatedSlot.subject,
+          day_of_week: updatedSlot.dayOfWeek,
+          start_time: updatedSlot.startTime,
+          end_time: updatedSlot.endTime,
+          room: updatedSlot.room,
+          teacher_name: updatedSlot.teacherName,
+          strictness_tag: updatedSlot.strictnessTag,
+          stakes_tag: updatedSlot.stakesTag,
+          weight: updatedSlot.weight,
+          reminders: updatedSlot.reminders,
+          recurrence: updatedSlot.recurrence,
+          specific_date: updatedSlot.specificDate,
+          notes: updatedSlot.notes
+        })
+        .eq('id', updatedSlot.id)
+        .eq('user_id', currentUser.id);
+    } catch (e) {
+      console.warn('[useRippleData] Failed to update slot in Supabase:', e);
+    }
 
     ActivityLogger.slotUpdated(currentUser.id, updatedSlot.id, updatedSlot.subject, {
       teacher: updatedSlot.teacherName,
@@ -203,6 +309,17 @@ export function useRippleData(currentUser: UserAccount | null) {
     const deletedSlot = slots.find(s => s.id === id);
     setSlots((prev) => prev.filter((s) => s.id !== id));
     await cancelItemNotifications(currentUser.id, id);
+    
+    // Delete from Supabase
+    try {
+      await supabase
+        .from('timetable_slots')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', currentUser.id);
+    } catch (e) {
+      console.warn('[useRippleData] Failed to delete slot from Supabase:', e);
+    }
     
     if (deletedSlot) {
       ActivityLogger.slotDeleted(currentUser.id, id, deletedSlot.subject, {
@@ -233,6 +350,29 @@ export function useRippleData(currentUser: UserAccount | null) {
     };
 
     setTasks((prev) => [newTask, ...prev]);
+
+    // Save to Supabase
+    try {
+      await supabase
+        .from('tasks')
+        .insert({
+          id: newTask.id,
+          user_id: currentUser.id,
+          title: newTask.title,
+          description: newTask.description,
+          type: newTask.category || 'academic',
+          status: newTask.status,
+          priority: 'medium',
+          due_date: newTask.dueDate,
+          estimated_hours: newTask.estimatedHours,
+          completion_percentage: newTask.completionPercentage,
+          category: newTask.category || 'academic',
+          has_deadline: newTask.hasDeadline ?? true,
+          renegotiated_count: 0
+        });
+    } catch (e) {
+      console.warn('[useRippleData] Failed to save task to Supabase:', e);
+    }
 
     ActivityLogger.taskCreated(currentUser.id, newTask.id, newTask.title, {
       has_deadline: newTask.hasDeadline,
@@ -288,6 +428,29 @@ export function useRippleData(currentUser: UserAccount | null) {
         return t;
       })
     );
+
+    // Save to Supabase
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        const isComplete = percentage >= 100;
+        const updatedStatus = isComplete
+          ? 'completed'
+          : calculateTaskStatus(task.dueDate, task.estimatedHours, percentage, settings.personalVelocityMultiplier, task.hasDeadline ?? true);
+
+        await supabase
+          .from('tasks')
+          .update({
+            completion_percentage: percentage,
+            status: updatedStatus,
+            completed_at: isComplete ? new Date().toISOString() : null
+          })
+          .eq('id', taskId)
+          .eq('user_id', currentUser.id);
+      }
+    } catch (e) {
+      console.warn('[useRippleData] Failed to update task in Supabase:', e);
+    }
   };
 
   const completeTask = async (taskId: string) => {
@@ -316,7 +479,7 @@ export function useRippleData(currentUser: UserAccount | null) {
             hasDeadline: true,
             dueDate: newDueDate,
             renegotiatedCount: count,
-            lastRenegotiatedAt: new Date().toISOString(),
+            lastRenegotiated: new Date().toISOString(),
             status: newStatus === 'too_late' ? 'tight' : newStatus
           };
           updatedTaskObj = obj;
@@ -328,6 +491,23 @@ export function useRippleData(currentUser: UserAccount | null) {
 
     if (updatedTaskObj) {
       await scheduleTaskNotifications(currentUser.id, updatedTaskObj, notificationSettings);
+      
+      // Save to Supabase
+      try {
+        await supabase
+          .from('tasks')
+          .update({
+            has_deadline: true,
+            due_date: newDueDate,
+            renegotiated_count: updatedTaskObj.renegotiatedCount,
+            last_renegotiated: updatedTaskObj.lastRenegotiated,
+            status: updatedTaskObj.status
+          })
+          .eq('id', taskId)
+          .eq('user_id', currentUser.id);
+      } catch (e) {
+        console.warn('[useRippleData] Failed to renegotiate task in Supabase:', e);
+      }
       
       ActivityLogger.taskRenegotiated(currentUser.id, taskId, updatedTaskObj.title, {
         reason,
@@ -351,6 +531,17 @@ export function useRippleData(currentUser: UserAccount | null) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
     await cancelItemNotifications(currentUser.id, id);
     
+    // Delete from Supabase
+    try {
+      await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', currentUser.id);
+    } catch (e) {
+      console.warn('[useRippleData] Failed to delete task from Supabase:', e);
+    }
+    
     if (deletedTask) {
       ActivityLogger.taskDeleted(currentUser.id, id, deletedTask.title, {
         was_completed: deletedTask.status === 'completed',
@@ -369,6 +560,28 @@ export function useRippleData(currentUser: UserAccount | null) {
       dateLogged: new Date().toISOString()
     };
     setEvidenceEntries((prev) => [newEntry, ...prev]);
+    
+    // Save to Supabase
+    try {
+      await supabase
+        .from('evidence_entries')
+        .insert({
+          id: newEntry.id,
+          user_id: currentUser.id,
+          task_id: newEntry.taskId,
+          task_title: newEntry.taskTitle,
+          subject: newEntry.subject,
+          teacher_name: newEntry.teacherName,
+          predicted_scenario: newEntry.predictedScenario,
+          actual_outcome: newEntry.actualOutcome,
+          was_on_time: newEntry.wasOnTime,
+          accuracy_rating: newEntry.accuracyRating,
+          date_logged: newEntry.dateLogged,
+          user_notes: newEntry.userNotes
+        });
+    } catch (e) {
+      console.warn('[useRippleData] Failed to save evidence to Supabase:', e);
+    }
     
     ActivityLogger.evidenceLogged(currentUser.id, newEntry.id, newEntry.taskTitle, {
       was_on_time: newEntry.wasOnTime,
@@ -389,6 +602,23 @@ export function useRippleData(currentUser: UserAccount | null) {
     };
     setStudyLogs((prev) => [newLog, ...prev]);
     
+    // Save to Supabase
+    try {
+      await supabase
+        .from('study_logs')
+        .insert({
+          id: newLog.id,
+          user_id: currentUser.id,
+          subject: newLog.subject,
+          duration_minutes: newLog.durationMinutes,
+          topic: newLog.topic,
+          logged_at: newLog.loggedAt,
+          source: newLog.source
+        });
+    } catch (e) {
+      console.warn('[useRippleData] Failed to save study log to Supabase:', e);
+    }
+    
     ActivityLogger.studyLogAdded(currentUser.id, newLog.id, newLog.subject, {
       duration_minutes: newLog.durationMinutes,
       topic: newLog.topic,
@@ -402,6 +632,17 @@ export function useRippleData(currentUser: UserAccount | null) {
     if (!currentUser) return;
     const deletedLog = studyLogs.find(l => l.id === id);
     setStudyLogs((prev) => prev.filter((l) => l.id !== id));
+    
+    // Delete from Supabase
+    try {
+      await supabase
+        .from('study_logs')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', currentUser.id);
+    } catch (e) {
+      console.warn('[useRippleData] Failed to delete study log from Supabase:', e);
+    }
     
     if (deletedLog) {
       ActivityLogger.studyLogDeleted(currentUser.id, id, deletedLog.subject, {
@@ -418,6 +659,18 @@ export function useRippleData(currentUser: UserAccount | null) {
     if (!currentUser) return;
     setSettings((prev) => ({ ...prev, ...newSettings }));
     
+    // Save to Supabase
+    try {
+      await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: currentUser.id,
+          ...newSettings
+        });
+    } catch (e) {
+      console.warn('[useRippleData] Failed to save settings to Supabase:', e);
+    }
+    
     ActivityLogger.settingsUpdated(currentUser.id, {
       changed_fields: Object.keys(newSettings),
       new_values: newSettings
@@ -429,6 +682,19 @@ export function useRippleData(currentUser: UserAccount | null) {
   const updateNotificationSettings = async (newSettings: Partial<NotificationSettings>) => {
     if (!currentUser) return;
     setNotificationSettings((prev) => ({ ...prev, ...newSettings }));
+    
+    // Save to Supabase
+    try {
+      await supabase
+        .from('notification_settings')
+        .upsert({
+          user_id: currentUser.id,
+          ...newSettings
+        });
+    } catch (e) {
+      console.warn('[useRippleData] Failed to save notification settings to Supabase:', e);
+    }
+    
     showSuccess('Notification preferences saved.');
   };
 

@@ -3,17 +3,41 @@ import { AdminAuditEntry } from '@/types/admin';
 import { ShieldCheck, Eye, ExternalLink, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { supabase } from '@/integrations/supabase/client';
 
 export const AdminAuditLog: React.FC = () => {
   const [logs, setLogs] = useState<AdminAuditEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('ripple_admin_audit_logs') || '[]');
-      setLogs(saved);
-    } catch {
-      setLogs([]);
-    }
+    const loadLogs = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('admin_audit_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (!error && data) {
+          setLogs(data.map(log => ({
+            id: log.id,
+            adminEmail: log.admin_email,
+            action: log.action,
+            targetUserId: log.target_user_id,
+            targetUserEmail: log.target_user_email,
+            timestamp: log.created_at,
+            details: log.details
+          })));
+        }
+      } catch (e) {
+        console.warn('[AdminAuditLog] Failed to fetch audit logs:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLogs();
   }, []);
 
   return (
@@ -28,7 +52,11 @@ export const AdminAuditLog: React.FC = () => {
         </Badge>
       </div>
 
-      {logs.length > 0 ? (
+      {isLoading ? (
+        <div className="p-8 text-center text-slate-400">
+          Loading audit logs...
+        </div>
+      ) : logs.length > 0 ? (
         <Table>
           <TableHeader className="bg-slate-950 border-b border-slate-800">
             <TableRow>
@@ -64,4 +92,4 @@ export const AdminAuditLog: React.FC = () => {
       )}
     </div>
   );
-};
+}

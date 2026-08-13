@@ -43,8 +43,16 @@ export const AdminUsersList: React.FC<AdminUsersListProps> = ({
     let valA = a[sortField];
     let valB = b[sortField];
 
-    if (valA < valB) return sortAsc ? -1 : 1;
-    if (valA > valB) return sortAsc ? 1 : -1;
+    if (typeof valA === 'string' && typeof valB === 'string') {
+      if (valA < valB) return sortAsc ? -1 : 1;
+      if (valA > valB) return sortAsc ? 1 : -1;
+      return 0;
+    }
+    
+    if (typeof valA === 'number' && typeof valB === 'number') {
+      return sortAsc ? valA - valB : valB - valA;
+    }
+    
     return 0;
   });
 
@@ -183,4 +191,4 @@ export const AdminUsersList: React.FC<AdminUsersListProps> = ({
       </div>
     </div>
   );
-};
+}

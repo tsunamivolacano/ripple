@@ -1,0 +1,7 @@
+ALTER TABLE public.timetable_slots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.evidence_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.study_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.procrastination_debt ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_audit_logs ENABLE ROW LEVEL SECURITY;

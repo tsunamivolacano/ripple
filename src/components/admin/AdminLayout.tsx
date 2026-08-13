@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   AppOverviewMetrics, 
   SubjectStudyBreakdown, 
@@ -7,10 +7,10 @@ import {
 } from '@/types/admin';
 import { 
   fetchAdminOverview, 
-  fetchAdminUsersList, 
-  logAdminAuditAction,
-  AUTHORIZED_ADMIN_EMAIL,
-  fetchUserActivityLogs
+  fetchAdminUsersList,
+  verifyAdminAccess,
+  subscribeToAdminUpdates,
+  AUTHORIZED_ADMIN_EMAIL
 } from '@/services/adminService';
 import { AdminOverview } from './AdminOverview';
 import { AdminUsersList } from './AdminUsersList';
@@ -27,9 +27,7 @@ import {
   CheckCircle2, 
   Activity, 
   ShieldCheck, 
-  LogOut, 
-  ArrowLeft,
-  ExternalLink
+  ArrowLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +45,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   const [metrics, setMetrics] = useState<AppOverviewMetrics | null>(null);
   const [subjectBreakdown, setSubjectBreakdown] = useState<SubjectStudyBreakdown[]>([]);
@@ -54,29 +53,60 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
+  // Fetch all admin data
+  const fetchAllData = useCallback(async () => {
+    try {
       const overview = await fetchAdminOverview();
       const userList = await fetchAdminUsersList();
-
+      
       setMetrics(overview.metrics);
       setSubjectBreakdown(overview.subjectBreakdown);
       setUserActivityTrend(overview.userActivityTrend);
       setUsers(userList);
+    } catch (e) {
+      console.warn('[AdminLayout] Failed to fetch admin data:', e);
+    }
+  }, []);
+
+  // Initialize admin state and fetch data
+  useEffect(() => {
+    async function initAdmin() {
+      setIsLoading(true);
+      try {
+        const adminCheck = await verifyAdminAccess();
+        setIsAdmin(adminCheck);
+        
+        if (adminCheck) {
+          await fetchAllData();
+        }
+      } catch (e) {
+        console.warn('[AdminLayout] Failed to init admin data:', e);
+      }
       setIsLoading(false);
     }
-    loadData();
-  }, []);
+    initAdmin();
+  }, [fetchAllData]);
+
+  // Set up real-time subscriptions for live updates
+  useEffect(() => {
+    if (!isAdmin) return;
+    
+    const unsubscribe = subscribeToAdminUpdates(
+      fetchAllData,
+      fetchAllData,
+      fetchAllData,
+      fetchAllData
+    );
+    
+    return () => unsubscribe();
+  }, [isAdmin, fetchAllData]);
 
   const handleSelectUser = (user: AdminUserSummary) => {
     setSelectedUser(user);
     setActiveTab('user_details');
-    logAdminAuditAction('VIEW_USER_DETAILS', user.id, user.email, `Inspected user details for ${user.name}`);
   };
 
   const handleStartImpersonating = (user: AdminUserSummary) => {
-    logAdminAuditAction('IMPERSONATE_USER_START', user.id, user.email, `Started Support Mode / Viewing as user ${user.email}`);
     onImpersonateUser(user);
   };
 
