@@ -19,6 +19,7 @@ import {
   getNextSlotDateISO 
 } from '@/utils/notificationService';
 import { UserAccount } from './useRippleAuth';
+import { ActivityLogger } from '@/services/activityLogger';
 
 const defaultPersona = PERSONAS_MAP['riya'];
 
@@ -156,13 +157,7 @@ export function useRippleData(currentUser: UserAccount | null) {
       setTasks((prevTasks) =>
         prevTasks.map((t) => {
           if (t.status === 'completed' || t.status === 'renegotiated') return t;
-          const newStatus = calculateTaskStatus(
-            t.dueDate,
-            t.estimatedHours,
-            t.completionPercentage,
-            settings.personalVelocityMultiplier,
-            t.hasDeadline ?? true
-          );
+          const newStatus = calculateTaskStatus(t.dueDate, t.estimatedHours, t.completionPercentage, settings.personalVelocityMultiplier, t.hasDeadline ?? true);
           return { ...t, status: newStatus };
         })
       );
@@ -176,6 +171,12 @@ export function useRippleData(currentUser: UserAccount | null) {
     const updatedSlots = [...slots, newSlot];
     setSlots(updatedSlots);
 
+    ActivityLogger.slotAdded(currentUser.id, newSlot.id, newSlot.subject, {
+      teacher: newSlot.teacherName,
+      time: `${newSlot.startTime} - ${newSlot.endTime}`,
+      day: newSlot.dayOfWeek
+    });
+
     const nextClassISO = getNextSlotDateISO(newSlot.dayOfWeek, newSlot.startTime);
     await scheduleClassNotifications(currentUser.id, newSlot, nextClassISO, notificationSettings);
     showSuccess(`Timetable slot for ${newSlot.subject} created with reminders.`);
@@ -186,6 +187,12 @@ export function useRippleData(currentUser: UserAccount | null) {
     const updatedSlots = slots.map((s) => (s.id === updatedSlot.id ? updatedSlot : s));
     setSlots(updatedSlots);
 
+    ActivityLogger.slotUpdated(currentUser.id, updatedSlot.id, updatedSlot.subject, {
+      teacher: updatedSlot.teacherName,
+      time: `${updatedSlot.startTime} - ${updatedSlot.endTime}`,
+      day: updatedSlot.dayOfWeek
+    });
+
     const nextClassISO = getNextSlotDateISO(updatedSlot.dayOfWeek, updatedSlot.startTime);
     await scheduleClassNotifications(currentUser.id, updatedSlot, nextClassISO, notificationSettings);
     showSuccess(`Updated ${updatedSlot.subject} class schedule.`);
@@ -193,8 +200,18 @@ export function useRippleData(currentUser: UserAccount | null) {
 
   const deleteSlot = async (id: string) => {
     if (!currentUser) return;
+    const deletedSlot = slots.find(s => s.id === id);
     setSlots((prev) => prev.filter((s) => s.id !== id));
     await cancelItemNotifications(currentUser.id, id);
+    
+    if (deletedSlot) {
+      ActivityLogger.slotDeleted(currentUser.id, id, deletedSlot.subject, {
+        teacher: deletedSlot.teacherName,
+        time: `${deletedSlot.startTime} - ${deletedSlot.endTime}`,
+        day: deletedSlot.dayOfWeek
+      });
+    }
+    
     showSuccess('Timetable slot removed.');
   };
 
@@ -216,6 +233,14 @@ export function useRippleData(currentUser: UserAccount | null) {
     };
 
     setTasks((prev) => [newTask, ...prev]);
+
+    ActivityLogger.taskCreated(currentUser.id, newTask.id, newTask.title, {
+      has_deadline: newTask.hasDeadline,
+      estimated_hours: newTask.estimatedHours,
+      due_date: newTask.dueDate,
+      task_type: newTask.taskType,
+      category: newTask.category
+    });
 
     if (newTask.hasDeadline && newTask.dueDate) {
       await scheduleTaskNotifications(currentUser.id, newTask, notificationSettings);
@@ -241,6 +266,12 @@ export function useRippleData(currentUser: UserAccount | null) {
             completedAt: isComplete ? new Date().toISOString() : t.completedAt
           };
 
+          ActivityLogger.taskUpdated(currentUser.id, taskId, t.title, {
+            completion_percentage: percentage,
+            previous_status: t.status,
+            new_status: updatedStatus
+          });
+
           if (isComplete) {
             setCompletedTaskForCelebration(updatedTask);
             cancelItemNotifications(currentUser.id, taskId);
@@ -260,10 +291,17 @@ export function useRippleData(currentUser: UserAccount | null) {
   };
 
   const completeTask = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
     await updateTaskProgress(taskId, 100);
+    
+    ActivityLogger.taskCompleted(currentUser.id, taskId, task.title, {
+      completion_time: new Date().toISOString()
+    });
   };
 
-  const renegotiateTask = async (taskId: string, newDueDate: string, _reason: string) => {
+  const renegotiateTask = async (taskId: string, newDueDate: string, reason: string) => {
     if (!currentUser) return;
 
     let updatedTaskObj: Task | null = null;
@@ -290,6 +328,12 @@ export function useRippleData(currentUser: UserAccount | null) {
 
     if (updatedTaskObj) {
       await scheduleTaskNotifications(currentUser.id, updatedTaskObj, notificationSettings);
+      
+      ActivityLogger.taskRenegotiated(currentUser.id, taskId, updatedTaskObj.title, {
+        reason,
+        new_due_date: newDueDate,
+        previous_due_date: updatedTaskObj.dueDate
+      });
     }
 
     setDebt((d) => ({
@@ -303,8 +347,17 @@ export function useRippleData(currentUser: UserAccount | null) {
 
   const deleteTask = async (id: string) => {
     if (!currentUser) return;
+    const deletedTask = tasks.find(t => t.id === id);
     setTasks((prev) => prev.filter((t) => t.id !== id));
     await cancelItemNotifications(currentUser.id, id);
+    
+    if (deletedTask) {
+      ActivityLogger.taskDeleted(currentUser.id, id, deletedTask.title, {
+        was_completed: deletedTask.status === 'completed',
+        completion_percentage: deletedTask.completionPercentage
+      });
+    }
+    
     showSuccess('Task removed.');
   };
 
@@ -316,6 +369,14 @@ export function useRippleData(currentUser: UserAccount | null) {
       dateLogged: new Date().toISOString()
     };
     setEvidenceEntries((prev) => [newEntry, ...prev]);
+    
+    ActivityLogger.evidenceLogged(currentUser.id, newEntry.id, newEntry.taskTitle, {
+      was_on_time: newEntry.wasOnTime,
+      accuracy_rating: newEntry.accuracyRating,
+      subject: newEntry.subject,
+      teacher: newEntry.teacherName
+    });
+    
     showSuccess('Outcome logged in Evidence Case File!');
   };
 
@@ -327,18 +388,41 @@ export function useRippleData(currentUser: UserAccount | null) {
       loggedAt: new Date().toISOString()
     };
     setStudyLogs((prev) => [newLog, ...prev]);
+    
+    ActivityLogger.studyLogAdded(currentUser.id, newLog.id, newLog.subject, {
+      duration_minutes: newLog.durationMinutes,
+      topic: newLog.topic,
+      source: newLog.source
+    });
+    
     showSuccess(`Logged ${newLog.durationMinutes} minutes of study for ${newLog.subject}!`);
   };
 
   const deleteStudyLog = async (id: string) => {
     if (!currentUser) return;
+    const deletedLog = studyLogs.find(l => l.id === id);
     setStudyLogs((prev) => prev.filter((l) => l.id !== id));
+    
+    if (deletedLog) {
+      ActivityLogger.studyLogDeleted(currentUser.id, id, deletedLog.subject, {
+        duration_minutes: deletedLog.durationMinutes,
+        topic: deletedLog.topic,
+        source: deletedLog.source
+      });
+    }
+    
     showSuccess('Study entry removed.');
   };
 
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
     if (!currentUser) return;
     setSettings((prev) => ({ ...prev, ...newSettings }));
+    
+    ActivityLogger.settingsUpdated(currentUser.id, {
+      changed_fields: Object.keys(newSettings),
+      new_values: newSettings
+    });
+    
     showSuccess('Settings updated.');
   };
 
