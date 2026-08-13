@@ -55,7 +55,7 @@ interface RippleContextType {
   closeTutorial: () => void;
   completeTutorial: () => void;
   setTutorialStep: (step: number) => void;
-
+  
   // Auth actions
   loginWithEmail: (email: string, password: string) => Promise<AuthResponse>;
   signUpWithEmail: (email: string, password: string) => Promise<AuthResponse>;
@@ -65,7 +65,7 @@ interface RippleContextType {
   setActiveTaskForPrediction: (task: Task | null) => void;
   setActiveFocusTask: (task: Task | null) => void;
   setCompletedTaskForCelebration: (task: Task | null) => void;
-
+  
   // Slot management
   addSlot: (slot: Omit<TimetableSlot, 'id'>) => Promise<void>;
   updateSlot: (slot: TimetableSlot) => Promise<void>;
@@ -87,7 +87,7 @@ interface RippleContextType {
 
   // Settings
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
-
+  
   // Persona actions
   loadPersonaData: (personaId: string) => void;
   resetAllData: () => void;

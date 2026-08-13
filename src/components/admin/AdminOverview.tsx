@@ -1,14 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
   AppOverviewMetrics, 
   SubjectStudyBreakdown, 
   UserActivityTrend 
 } from '@/types/admin';
-import { fetchAdminOverview } from '@/services/adminService';
-import { Badge } from '@/components/ui/badge';
+import { 
+  Users, 
+  CheckCircle2, 
+  Clock, 
+  CalendarDays, 
+  TrendingUp, 
+  Sparkles, 
+  BarChart2, 
+  Zap,
+  BookOpen,
+  UserCheck
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
-import { TrendingUp, BarChart2, Zap } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 
 interface AdminOverviewProps {
   metrics: AppOverviewMetrics;
@@ -18,7 +40,11 @@ interface AdminOverviewProps {
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe'];
 
-export const AdminOverview: React.FC<AdminOverviewProps> = ({ metrics, subjectBreakdown, userActivityTrend }) => {
+export const AdminOverview: React.FC<AdminOverviewProps> = ({
+  metrics,
+  subjectBreakdown,
+  userActivityTrend
+}) => {
   const totalHours = (metrics.totalStudyMinutesLogged / 60).toFixed(1);
 
   return (
@@ -43,9 +69,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ metrics, subjectBr
         <div className="flex items-center gap-3 bg-slate-950/80 px-4 py-2.5 rounded-2xl border border-slate-800">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Registered</span>
-            <div className="text-2xl font-extrabold font-mono text-purple-300">
-              {metrics.totalRegisteredUsers} Users
-            </div>
+            <div className="text-2xl font-extrabold font-mono text-purple-300">{metrics.totalRegisteredUsers} Users</div>
           </div>
         </div>
       </div>
@@ -177,7 +201,4 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ metrics, subjectBr
       </div>
     </div>
   );
-}
-
-// Import missing icons
-import { Users, UserCheck, CheckCircle2, BookOpen, CalendarDays } from 'lucide-react';
+};

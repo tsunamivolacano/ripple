@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { safeGetStorage, safeSetStorage, getLocalUserId } from '@/utils/storageUtils';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { showSuccess } from '@/utils/toast';
-import { ActivityLogger } from '@/services/activityLogger';
 
 export interface UserAccount {
   id: string;
@@ -19,40 +18,13 @@ export interface AuthResponse {
 }
 
 export function useRippleAuth() {
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() =>
+    safeGetStorage<UserAccount | null>('ripple_active_user', null)
+  );
 
   useEffect(() => {
-    // Initialize from storage
-    const storedUser = safeGetStorage<UserAccount | null>('ripple_active_user', null);
-    if (storedUser) {
-      setCurrentUser(storedUser);
-    }
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user && !currentUser?.isLocalSession) {
-        // Check if profile exists, create if not
-        checkAndCreateProfile(session.user.id, session.user.email || '').then(() => {
-          const acc: UserAccount = {
-            id: session.user.id,
-            email: session.user.email || '',
-            isDemo: false
-          };
-          setCurrentUser(acc);
-          safeSetStorage('ripple_active_user', acc);
-          
-          // Log login activity
-          ActivityLogger.userLogin(session.user.id, session.user.email || '', {
-            method: 'session_restore'
-          });
-        });
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user && !currentUser?.isLocalSession) {
-        // Check and create profile if needed
-        await checkAndCreateProfile(session.user.id, session.user.email || '');
-        
         const acc: UserAccount = {
           id: session.user.id,
           email: session.user.email || '',
@@ -60,42 +32,23 @@ export function useRippleAuth() {
         };
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
-        
-        // Log login activity
-        ActivityLogger.userLogin(session.user.id, session.user.email || '', {
-          method: 'auth_state_change'
-        });
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user && !currentUser?.isLocalSession) {
+        const acc: UserAccount = {
+          id: session.user.id,
+          email: session.user.email || '',
+          isDemo: false
+        };
+        setCurrentUser(acc);
+        safeSetStorage('ripple_active_user', acc);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
-
-  const checkAndCreateProfile = async (userId: string, email: string) => {
-    try {
-      // Check if profile exists
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single();
-
-      if (error || !profile) {
-        // Create profile for new user
-        await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            email: email,
-            name: email.split('@')[0],
-            role: 'student',
-            status: 'active'
-          });
-      }
-    } catch (e) {
-      console.warn('[useRippleAuth] Profile check/create failed:', e);
-    }
-  };
 
   const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     const cleanEmail = email.trim();
@@ -110,9 +63,6 @@ export function useRippleAuth() {
       });
 
       if (data?.user) {
-        // Ensure profile exists
-        await checkAndCreateProfile(data.user.id, cleanEmail);
-        
         const acc: UserAccount = {
           id: data.user.id,
           email: data.user.email || cleanEmail,
@@ -121,12 +71,6 @@ export function useRippleAuth() {
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
         showSuccess(`Signed in as ${cleanEmail}`);
-        
-        // Log login activity
-        ActivityLogger.userLogin(data.user.id, cleanEmail, {
-          method: 'email_password'
-        });
-        
         return { success: true };
       }
     } catch (e) {
@@ -143,12 +87,6 @@ export function useRippleAuth() {
     setCurrentUser(localAcc);
     safeSetStorage('ripple_active_user', localAcc);
     showSuccess(`Signed in as ${cleanEmail}`);
-    
-    // Log login activity for local session
-    ActivityLogger.userLogin(localId, cleanEmail, {
-      method: 'local_session'
-    });
-    
     return { success: true };
   };
 
@@ -165,9 +103,6 @@ export function useRippleAuth() {
       });
 
       if (data?.user) {
-        // Ensure profile exists
-        await checkAndCreateProfile(data.user.id, cleanEmail);
-        
         const acc: UserAccount = {
           id: data.user.id,
           email: data.user.email || cleanEmail,
@@ -176,12 +111,6 @@ export function useRippleAuth() {
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
         showSuccess(`Account created & signed in!`);
-        
-        // Log signup activity
-        ActivityLogger.userRegistered(data.user.id, cleanEmail, {
-          method: 'email_password'
-        });
-        
         return { success: true };
       }
     } catch (e) {
@@ -198,12 +127,6 @@ export function useRippleAuth() {
     setCurrentUser(localAcc);
     safeSetStorage('ripple_active_user', localAcc);
     showSuccess(`Account created & signed in!`);
-    
-    // Log signup activity for local session
-    ActivityLogger.userRegistered(localId, cleanEmail, {
-      method: 'local_session'
-    });
-    
     return { success: true };
   };
 
@@ -218,28 +141,12 @@ export function useRippleAuth() {
     setCurrentUser(account);
     safeSetStorage('ripple_active_user', account);
     showSuccess(`Viewing Demo Persona: ${persona.name}`);
-    
-    // Log login activity for demo account
-    ActivityLogger.userLogin(account.id, account.email, {
-      method: 'demo_account',
-      persona_id: persona.id
-    });
   };
 
   const logout = async () => {
     try {
       if (currentUser && !currentUser.isDemo && !currentUser.isLocalSession) {
-        // Log logout activity before signing out
-        ActivityLogger.userLogout(currentUser.id, currentUser.email, {
-          method: 'supabase_signout'
-        });
-        
         await supabase.auth.signOut();
-      } else if (currentUser) {
-        // Log logout for local/demo sessions
-        ActivityLogger.userLogout(currentUser.id, currentUser.email, {
-          method: currentUser.isDemo ? 'demo_logout' : 'local_logout'
-        });
       }
     } catch (e) {
       console.error('Error signing out:', e);

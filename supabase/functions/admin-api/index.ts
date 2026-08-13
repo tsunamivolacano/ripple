@@ -145,42 +145,6 @@ serve(async (req) => {
       });
     }
 
-    // Route: ACTIVITY LOGS
-    if (action === 'activity_logs') {
-      const { data: activityLogs, error: activityError } = await adminClient
-        .from('user_activity_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (activityError) {
-        console.error("[admin-api] Error fetching activity logs:", activityError);
-        return new Response(JSON.stringify({ error: 'Failed to fetch activity logs' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Get user emails for user_id mapping
-      const userIds = [...new Set(activityLogs?.map(l => l.user_id) || [])];
-      const { data: usersData } = await adminClient.auth.admin.listUsers();
-      const userMap = new Map(usersData?.users?.map(u => [u.id, u.email]) || []);
-
-      const formattedLogs = activityLogs?.map(log => ({
-        id: log.id,
-        userEmail: userMap.get(log.user_id) || log.user_id,
-        userName: log.item_title || 'Unknown',
-        eventType: log.action_type,
-        description: log.details?.description || '',
-        timestamp: log.created_at
-      })) || [];
-
-      return new Response(JSON.stringify({ logs: formattedLogs }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
     // Route: LOG AUDIT ACTION
     if (action === 'log_audit') {
       const body = await req.json();

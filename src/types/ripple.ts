@@ -24,13 +24,13 @@ export type TaskType =
   | 'reading' 
   | 'problem_set' 
   | 'revision' 
-  | 'project' 
-  | 'personal' 
-  | 'meeting' 
-  | 'appointment' 
-  | 'reminder' 
-  | 'event' 
-  | 'chore' 
+  | 'project'
+  | 'personal'
+  | 'meeting'
+  | 'appointment'
+  | 'reminder'
+  | 'event'
+  | 'chore'
   | 'self_study';
 
 export type TaskCategory = 'academic' | 'personal';
@@ -82,7 +82,7 @@ export interface Task {
   createdAt: string;
   completedAt?: string;
   renegotiatedCount?: number;
-  lastRenegotiated?: string;
+  lastRenegotiatedAt?: string;
 }
 
 export interface DomainConsequence {
@@ -178,95 +178,4 @@ export interface UserSettings {
   isMinorProfile: boolean;
   weeklyDigestOnly: boolean;
   personalVelocityMultiplier: number; // e.g. 1.2x
-}
-
-export interface UserActivityLog {
-  id: string;
-  user_id: string;
-  timestamp: string;
-  event_type: string;
-  event_name: string;
-  message: string;
-  source: string;
-  route: string;
-  request_id: string;
-  session_id: string;
-  task_id: string;
-  metadata: any;
-  prompt: string;
-  response: string;
-  model: string;
-  provider: string;
-  status_code: number;
-  duration_ms: number;
-  error_message: string;
-  created_at: string;
-}
-
-export interface CalendarEvent {
-  id: string;
-  user_id: string;
-  title: string;
-  start_time: string;
-  end_time: string;
-  description: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UserLog {
-  id: string;
-  user_id: string;
-  timestamp: string;
-  event_type: string;
-  event_name: string;
-  message: string;
-  source: string;
-  route: string;
-  request_id: string;
-  session_id: string;
-  task_id: string;
-  metadata: any;
-  prompt: string;
-  response: string;
-  model: string;
-  provider: string;
-  status_code: number;
-  duration_ms: number;
-  error_message: string;
-  created_at: string;
-}
-
-export interface AdminUserSummary {
-  id: string;
-  email: string;
-  name: string;
-  createdAt: string;
-  lastActivity: string;
-  tasksCreated: number;
-  tasksCompleted: number;
-  studyHours: string;
-  timerSessions: number;
-  calendarEvents: number;
-  role: 'admin' | 'student';
-}
-
-export interface AdminAuditEntry {
-  id: string;
-  adminEmail: string;
-  action: 'IMPERSONATE_USER_START' | 'IMPERSONATE_USER_END' | 'VIEW_USER_DETAILS' | 'RENEGOTIATE_OVERRIDE' | 'SETTINGS_CHANGE';
-  targetUserId: string;
-  targetUserEmail: string;
-  timestamp: string;
-  details?: string;
-}
-
-export interface AdminSystemActivity {
-  id: string;
-  userEmail: string;
-  userName: string;
-  eventType: string;
-  description: string;
-  timestamp: string;
 }

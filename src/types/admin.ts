@@ -53,7 +53,7 @@ export interface AdminSystemActivity {
   id: string;
   userEmail: string;
   userName: string;
-  eventType: string;
+  eventType: 'task_completed' | 'timer_finished' | 'study_logged' | 'renegotiated' | 'user_signed_up';
   description: string;
   timestamp: string;
 }
