@@ -14,7 +14,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { logUserActivity } from '@/services/loggerService';
 
 interface Message {
   id: string;
@@ -87,7 +86,7 @@ const DEFAULT_CHIPS = [
 ];
 
 export const RippleAssistantChatbot: React.FC = () => {
-  const { startTutorial, currentUser } = useRipple();
+  const { startTutorial } = useRipple();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -122,17 +121,6 @@ export const RippleAssistantChatbot: React.FC = () => {
 
     setMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setInputValue('');
-
-    if (currentUser) {
-      logUserActivity({
-        eventName: 'chatbot_query_asked',
-        eventType: 'chat',
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        success: true,
-        metadata: { query }
-      });
-    }
 
     // Generate intelligent response
     setTimeout(() => {
@@ -203,18 +191,7 @@ export const RippleAssistantChatbot: React.FC = () => {
       {/* Floating Toggle Button */}
       {!isOpen && (
         <Button
-          onClick={() => {
-            setIsOpen(true);
-            if (currentUser) {
-              logUserActivity({
-                eventName: 'chatbot_opened',
-                eventType: 'chat',
-                userId: currentUser.id,
-                userEmail: currentUser.email,
-                success: true
-              });
-            }
-          }}
+          onClick={() => setIsOpen(true)}
           className="h-14 px-5 rounded-full bg-gradient-to-r from-rose-600 via-purple-600 to-indigo-600 hover:from-rose-700 hover:to-indigo-700 text-white font-bold text-xs shadow-2xl shadow-rose-950 flex items-center gap-2.5 transition-all hover:scale-105 group border border-white/20"
         >
           <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white">
@@ -342,7 +319,7 @@ export const RippleAssistantChatbot: React.FC = () => {
               onClick={startTutorial}
               className="text-[10px] font-bold text-indigo-300 bg-indigo-950/50 hover:bg-indigo-900/80 border border-indigo-500/40 px-2.5 py-1 rounded-lg shrink-0 flex items-center gap-1"
             >
-              <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
+              <HelpCircle className="w-3 h-3 text-indigo-400" />
               Launch Step-by-Step Tour
             </button>
 

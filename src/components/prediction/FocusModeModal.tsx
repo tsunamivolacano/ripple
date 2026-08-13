@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { logUserActivity } from '@/services/loggerService';
 
 interface FocusModeModalProps {
   task: Task | null;
@@ -25,7 +24,7 @@ interface FocusModeModalProps {
 const TIMER_PRESETS = [15, 25, 30, 45, 60];
 
 export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose }) => {
-  const { updateTaskProgress, completeTask, addStudyLog, slots, currentUser } = useRipple();
+  const { updateTaskProgress, completeTask, addStudyLog, slots } = useRipple();
 
   // Timer configuration states
   const [selectedPreset, setSelectedPreset] = useState<number>(25);
@@ -96,33 +95,11 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
       // Pause
       setIsRunning(false);
       targetEndTimeRef.current = null;
-
-      if (currentUser) {
-        logUserActivity({
-          eventName: 'focus_timer_paused',
-          eventType: 'timer',
-          userId: currentUser.id,
-          userEmail: currentUser.email,
-          success: true,
-          metadata: { taskId: task?.id, taskTitle: task?.title, secondsLeft }
-        });
-      }
     } else {
       // Start - Record absolute target end time
       const now = Date.now();
       targetEndTimeRef.current = now + secondsLeft * 1000;
       setIsRunning(true);
-
-      if (currentUser) {
-        logUserActivity({
-          eventName: 'focus_timer_started',
-          eventType: 'timer',
-          userId: currentUser.id,
-          userEmail: currentUser.email,
-          success: true,
-          metadata: { taskId: task?.id, taskTitle: task?.title, presetMinutes: selectedPreset, subject }
-        });
-      }
     }
   };
 
@@ -131,17 +108,6 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
     setIsRunning(false);
     targetEndTimeRef.current = null;
     setSecondsLeft(totalSeconds);
-
-    if (currentUser) {
-      logUserActivity({
-        eventName: 'focus_timer_reset',
-        eventType: 'timer',
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        success: true,
-        metadata: { taskId: task?.id, presetMinutes: selectedPreset }
-      });
-    }
   };
 
   // Timestamp-based ticking logic (Handles backgrounding & screen lock accurately)
@@ -170,17 +136,6 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
               topic: task ? `Focus Sprint: ${task.title}` : undefined,
               source: 'timer'
             });
-
-            if (currentUser) {
-              logUserActivity({
-                eventName: 'focus_timer_finished',
-                eventType: 'timer',
-                userId: currentUser.id,
-                userEmail: currentUser.email,
-                success: true,
-                metadata: { taskId: task?.id, taskTitle: task?.title, durationMinutes: elapsedMins, subject }
-              });
-            }
           }
         }
       };
@@ -202,7 +157,7 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }
-  }, [isRunning, totalSeconds, subject, task, addStudyLog, currentUser]);
+  }, [isRunning, totalSeconds, subject, task, addStudyLog]);
 
   if (!task) return null;
 

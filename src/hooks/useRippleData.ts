@@ -12,11 +12,13 @@ import { calculateTaskStatus } from '@/utils/timeUtils';
 import { safeGetStorage, safeSetStorage } from '@/utils/storageUtils';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { showSuccess } from '@/utils/toast';
-import { logUserActivity } from '@/services/loggerService';
+import { 
+  scheduleTaskNotifications, 
+  scheduleClassNotifications, 
+  cancelItemNotifications, 
+  getNextSlotDateISO 
+} from '@/utils/notificationService';
 import { UserAccount } from './useRippleAuth';
-import { useSlotData } from './data/useSlotData';
-import { useTaskData } from './data/useTaskData';
-import { useEvidenceAndStudyData } from './data/useEvidenceAndStudyData';
 
 const defaultPersona = PERSONAS_MAP['riya'];
 
@@ -85,31 +87,6 @@ export function useRippleData(currentUser: UserAccount | null) {
   const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
   const [isNotificationModalOpen, setNotificationModalOpen] = useState<boolean>(false);
-
-  // Modular Sub-Hooks
-  const { addSlot, updateSlot, deleteSlot } = useSlotData(
-    currentUser,
-    slots,
-    setSlots,
-    notificationSettings
-  );
-
-  const { addTask, updateTaskProgress, completeTask, renegotiateTask, deleteTask } = useTaskData(
-    currentUser,
-    tasks,
-    setTasks,
-    setDebt,
-    settings,
-    notificationSettings,
-    setCompletedTaskForCelebration
-  );
-
-  const { logEvidence, addStudyLog, deleteStudyLog } = useEvidenceAndStudyData(
-    currentUser,
-    setEvidenceEntries,
-    studyLogs,
-    setStudyLogs
-  );
 
   // Load account data when currentUser changes
   useEffect(() => {
@@ -193,37 +170,181 @@ export function useRippleData(currentUser: UserAccount | null) {
     return () => clearInterval(timer);
   }, [settings.personalVelocityMultiplier]);
 
+  const addSlot = async (slotData: Omit<TimetableSlot, 'id'>) => {
+    if (!currentUser) return;
+    const newSlot: TimetableSlot = { ...slotData, id: `slot-${Date.now()}` };
+    const updatedSlots = [...slots, newSlot];
+    setSlots(updatedSlots);
+
+    const nextClassISO = getNextSlotDateISO(newSlot.dayOfWeek, newSlot.startTime);
+    await scheduleClassNotifications(currentUser.id, newSlot, nextClassISO, notificationSettings);
+    showSuccess(`Timetable slot for ${newSlot.subject} created with reminders.`);
+  };
+
+  const updateSlot = async (updatedSlot: TimetableSlot) => {
+    if (!currentUser) return;
+    const updatedSlots = slots.map((s) => (s.id === updatedSlot.id ? updatedSlot : s));
+    setSlots(updatedSlots);
+
+    const nextClassISO = getNextSlotDateISO(updatedSlot.dayOfWeek, updatedSlot.startTime);
+    await scheduleClassNotifications(currentUser.id, updatedSlot, nextClassISO, notificationSettings);
+    showSuccess(`Updated ${updatedSlot.subject} class schedule.`);
+  };
+
+  const deleteSlot = async (id: string) => {
+    if (!currentUser) return;
+    setSlots((prev) => prev.filter((s) => s.id !== id));
+    await cancelItemNotifications(currentUser.id, id);
+    showSuccess('Timetable slot removed.');
+  };
+
+  const addTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'status'>) => {
+    if (!currentUser) return;
+    const computedStatus = calculateTaskStatus(
+      taskData.dueDate,
+      taskData.estimatedHours,
+      taskData.completionPercentage,
+      settings.personalVelocityMultiplier,
+      taskData.hasDeadline ?? true
+    );
+
+    const newTask: Task = {
+      ...taskData,
+      id: `task-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      status: computedStatus
+    };
+
+    setTasks((prev) => [newTask, ...prev]);
+
+    if (newTask.hasDeadline && newTask.dueDate) {
+      await scheduleTaskNotifications(currentUser.id, newTask, notificationSettings);
+    }
+    showSuccess(`Activity "${newTask.title}" added successfully.`);
+  };
+
+  const updateTaskProgress = async (taskId: string, percentage: number) => {
+    if (!currentUser) return;
+
+    setTasks((prevTasks) =>
+      prevTasks.map((t) => {
+        if (t.id === taskId) {
+          const isComplete = percentage >= 100;
+          const updatedStatus = isComplete
+            ? 'completed'
+            : calculateTaskStatus(t.dueDate, t.estimatedHours, percentage, settings.personalVelocityMultiplier, t.hasDeadline ?? true);
+
+          const updatedTask = {
+            ...t,
+            completionPercentage: percentage,
+            status: updatedStatus,
+            completedAt: isComplete ? new Date().toISOString() : t.completedAt
+          };
+
+          if (isComplete) {
+            setCompletedTaskForCelebration(updatedTask);
+            cancelItemNotifications(currentUser.id, taskId);
+
+            setDebt((d) => ({
+              ...d,
+              streakDays: d.streakDays + 1,
+              compoundingScore: Math.max(0, d.compoundingScore - 5)
+            }));
+          }
+
+          return updatedTask;
+        }
+        return t;
+      })
+    );
+  };
+
+  const completeTask = async (taskId: string) => {
+    await updateTaskProgress(taskId, 100);
+  };
+
+  const renegotiateTask = async (taskId: string, newDueDate: string, _reason: string) => {
+    if (!currentUser) return;
+
+    let updatedTaskObj: Task | null = null;
+
+    setTasks((prevTasks) =>
+      prevTasks.map((t) => {
+        if (t.id === taskId) {
+          const count = (t.renegotiatedCount || 0) + 1;
+          const newStatus = calculateTaskStatus(newDueDate, t.estimatedHours, t.completionPercentage, settings.personalVelocityMultiplier, true);
+          const obj: Task = {
+            ...t,
+            hasDeadline: true,
+            dueDate: newDueDate,
+            renegotiatedCount: count,
+            lastRenegotiatedAt: new Date().toISOString(),
+            status: newStatus === 'too_late' ? 'tight' : newStatus
+          };
+          updatedTaskObj = obj;
+          return obj;
+        }
+        return t;
+      })
+    );
+
+    if (updatedTaskObj) {
+      await scheduleTaskNotifications(currentUser.id, updatedTaskObj, notificationSettings);
+    }
+
+    setDebt((d) => ({
+      ...d,
+      totalHoursBehind: d.totalHoursBehind + 0.5,
+      compoundingScore: Math.min(100, d.compoundingScore + 8)
+    }));
+
+    showSuccess('Task schedule renegotiated & notifications updated.');
+  };
+
+  const deleteTask = async (id: string) => {
+    if (!currentUser) return;
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    await cancelItemNotifications(currentUser.id, id);
+    showSuccess('Task removed.');
+  };
+
+  const logEvidence = async (entryData: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => {
+    if (!currentUser) return;
+    const newEntry: EvidenceEntry = {
+      ...entryData,
+      id: `ev-${Date.now()}`,
+      dateLogged: new Date().toISOString()
+    };
+    setEvidenceEntries((prev) => [newEntry, ...prev]);
+    showSuccess('Outcome logged in Evidence Case File!');
+  };
+
+  const addStudyLog = async (logData: Omit<StudyLog, 'id' | 'loggedAt'>) => {
+    if (!currentUser) return;
+    const newLog: StudyLog = {
+      ...logData,
+      id: `study-${Date.now()}`,
+      loggedAt: new Date().toISOString()
+    };
+    setStudyLogs((prev) => [newLog, ...prev]);
+    showSuccess(`Logged ${newLog.durationMinutes} minutes of study for ${newLog.subject}!`);
+  };
+
+  const deleteStudyLog = async (id: string) => {
+    if (!currentUser) return;
+    setStudyLogs((prev) => prev.filter((l) => l.id !== id));
+    showSuccess('Study entry removed.');
+  };
+
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
     if (!currentUser) return;
-    setSettings((prev) => {
-      const updated = { ...prev, ...newSettings };
-      logUserActivity({
-        eventName: 'settings_updated',
-        eventType: 'settings',
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        success: true,
-        metadata: { updatedKeys: Object.keys(newSettings), newSettings: updated }
-      });
-      return updated;
-    });
+    setSettings((prev) => ({ ...prev, ...newSettings }));
     showSuccess('Settings updated.');
   };
 
   const updateNotificationSettings = async (newSettings: Partial<NotificationSettings>) => {
     if (!currentUser) return;
-    setNotificationSettings((prev) => {
-      const updated = { ...prev, ...newSettings };
-      logUserActivity({
-        eventName: 'notification_settings_updated',
-        eventType: 'settings',
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        success: true,
-        metadata: { updatedKeys: Object.keys(newSettings) }
-      });
-      return updated;
-    });
+    setNotificationSettings((prev) => ({ ...prev, ...newSettings }));
     showSuccess('Notification preferences saved.');
   };
 
@@ -237,17 +358,6 @@ export function useRippleData(currentUser: UserAccount | null) {
     setDebt(bundle.debt);
     setSettings(bundle.settings);
     showSuccess(`Loaded template data: ${bundle.name}`);
-
-    if (currentUser) {
-      logUserActivity({
-        eventName: 'persona_template_loaded',
-        eventType: 'settings',
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        success: true,
-        metadata: { personaId: bundle.id, personaName: bundle.name }
-      });
-    }
   };
 
   const resetAllData = () => {
@@ -257,16 +367,6 @@ export function useRippleData(currentUser: UserAccount | null) {
     setStudyLogs([]);
     setDebt(emptyDebt);
     showSuccess('All data reset for active account.');
-
-    if (currentUser) {
-      logUserActivity({
-        eventName: 'user_data_reset',
-        eventType: 'settings',
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        success: true
-      });
-    }
   };
 
   return {
