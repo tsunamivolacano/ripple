@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Clock, User, Task, BookOpen, Calendar, Settings, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Activity, Clock, User, List, BookOpen, Calendar, Settings, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fetchUserActivityLogs } from '@/services/adminService';
@@ -14,8 +14,8 @@ interface ActivityLogEntry {
 }
 
 const ACTION_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  'TASK_CREATE': { label: 'Task Created', icon: Task, color: 'text-emerald-400' },
-  'TASK_UPDATE': { label: 'Task Updated', icon: Task, color: 'text-blue-400' },
+  'TASK_CREATE': { label: 'Task Created', icon: List, color: 'text-emerald-400' },
+  'TASK_UPDATE': { label: 'Task Updated', icon: List, color: 'text-blue-400' },
   'TASK_DELETE': { label: 'Task Deleted', icon: Task, color: 'text-rose-400' },
   'TASK_COMPLETE': { label: 'Task Completed', icon: CheckCircle2, color: 'text-emerald-400' },
   'TASK_RENEGOTIATE': { label: 'Task Renegotiated', icon: AlertCircle, color: 'text-amber-400' },
