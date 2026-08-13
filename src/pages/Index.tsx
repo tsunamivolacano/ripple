@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RippleProvider, useRipple } from '@/context/RippleContext';
 import { AuthPage } from '@/components/auth/AuthPage';
 import { Navbar } from '@/components/header/Navbar';
@@ -20,6 +20,7 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Task } from '@/types/ripple';
 import { Shield, Eye, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { logUserActivity } from '@/services/loggerService';
 
 const RippleAppContent: React.FC = () => {
   const {
@@ -43,6 +44,22 @@ const RippleAppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('warroom');
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [renegotiateTask, setRenegotiateTask] = useState<Task | null>(null);
+
+  // Log tab changes as page navigation events
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    if (currentUser) {
+      logUserActivity({
+        eventName: `view_tab_${newTab}`,
+        eventType: 'navigation',
+        userId: currentUser.id,
+        userEmail: currentUser.email,
+        pageRoute: `/#${newTab}`,
+        success: true,
+        metadata: { tab: newTab }
+      });
+    }
+  };
 
   if (!currentUser) {
     return <AuthPage />;
@@ -85,7 +102,7 @@ const RippleAppContent: React.FC = () => {
       {/* Top Navbar Header */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
       />
 
@@ -120,7 +137,7 @@ const RippleAppContent: React.FC = () => {
       <RippleAssistantChatbot />
 
       {/* Single Detailed Step-by-Step Tutorial Overlay */}
-      <TutorialOverlay onTabChange={(tab) => setActiveTab(tab)} />
+      <TutorialOverlay onTabChange={handleTabChange} />
 
       {/* Notification Settings Modal */}
       <NotificationSettingsModal
