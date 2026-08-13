@@ -16,7 +16,7 @@ interface ActivityLogEntry {
 const ACTION_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   'TASK_CREATE': { label: 'Task Created', icon: List, color: 'text-emerald-400' },
   'TASK_UPDATE': { label: 'Task Updated', icon: List, color: 'text-blue-400' },
-  'TASK_DELETE': { label: 'Task Deleted', icon: Task, color: 'text-rose-400' },
+  'TASK_DELETE': { label: 'Task Deleted', icon: List, color: 'text-rose-400' },
   'TASK_COMPLETE': { label: 'Task Completed', icon: CheckCircle2, color: 'text-emerald-400' },
   'TASK_RENEGOTIATE': { label: 'Task Renegotiated', icon: AlertCircle, color: 'text-amber-400' },
   'STUDY_LOG_ADD': { label: 'Study Log Added', icon: BookOpen, color: 'text-indigo-400' },
