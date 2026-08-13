@@ -152,6 +152,41 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
   ];
 }
 
+// Fetch User Activity Logs
+export async function fetchUserActivityLogs(userId?: string, limit: number = 50): Promise<AdminSystemActivity[]> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      let query = supabase
+        .from('user_activity_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
+
+      if (!error && data) {
+        return data.map(log => ({
+          id: log.id,
+          userEmail: log.user_id, // Will be resolved in admin API
+          userName: log.item_title || 'Unknown',
+          eventType: log.action_type as any,
+          description: log.details?.description || '',
+          timestamp: log.created_at
+        }));
+      }
+    }
+  } catch (e) {
+    console.warn('[adminService] Failed to fetch activity logs:', e);
+  }
+
+  return [];
+}
+
 // Log Audit Action
 export async function logAdminAuditAction(
   action: AdminAuditEntry['action'],

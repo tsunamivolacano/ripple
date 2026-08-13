@@ -9,7 +9,8 @@ import {
   fetchAdminOverview, 
   fetchAdminUsersList, 
   logAdminAuditAction,
-  AUTHORIZED_ADMIN_EMAIL 
+  AUTHORIZED_ADMIN_EMAIL,
+  fetchUserActivityLogs
 } from '@/services/adminService';
 import { AdminOverview } from './AdminOverview';
 import { AdminUsersList } from './AdminUsersList';
@@ -124,7 +125,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               { id: 'users', label: 'Registered Users', icon: Users },
               { id: 'study', label: 'Study Analytics', icon: BookOpen },
               { id: 'tasks', label: 'Task Analytics', icon: CheckCircle2 },
-              { id: 'activity', label: 'System Activity', icon: Activity },
+              { id: 'activity', label: 'Activity Stream', icon: Activity },
               { id: 'audit', label: 'Audit Trail', icon: ShieldCheck }
             ].map((tab) => {
               const Icon = tab.icon;
