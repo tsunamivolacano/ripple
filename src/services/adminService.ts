@@ -46,7 +46,7 @@ export async function fetchAdminOverview(): Promise<{
   try {
     // Get all users from auth
     const { data: usersData } = await supabase.auth.admin.listUsers();
-    const allUsers = usersData || [];
+    const allUsers = (usersData?.users || []) as { id: string; email: string; user_metadata: { name: string; } }[];
     
     // Get profiles for additional info
     const { data: profiles } = await supabase
@@ -73,7 +73,7 @@ export async function fetchAdminOverview(): Promise<{
       .select('*');
     
     const totalTasksCreated = tasks?.length || 0;
-    const completedTasks = tasks?.filter(t => t.status === 'completed').length || 0;
+    const completedTasks = tasks?.filter((t: { status: string }) => t.status === 'completed').length || 0;
     const incompleteTasks = totalTasksCreated - completedTasks;
     
     // Get real calendar events
@@ -86,8 +86,8 @@ export async function fetchAdminOverview(): Promise<{
       .from('study_logs')
       .select('duration_minutes');
     
-    const totalStudyMinutesLogged = studyLogs?.reduce((sum, log) => sum + (log.duration_minutes || 0), 0) || 0;
-    const timerSessionsCount = studyLogs?.filter(l => l.source === 'timer').length || 0;
+    const totalStudyMinutesLogged = studyLogs?.reduce((sum, log: { duration_minutes: any }) => sum + (log.duration_minutes || 0), 0) || 0;
+    const timerSessionsCount = studyLogs?.filter((l: { source: string }) => l.source === 'timer').length || 0;
     const avgSessionDurationMinutes = timerSessionsCount > 0 ? Math.round(totalStudyMinutesLogged / timerSessionsCount) : 0;
     
     // Subject breakdown from study logs
@@ -124,7 +124,7 @@ export async function fetchAdminOverview(): Promise<{
         .gte('timestamp', dayStart.toISOString())
         .lte('timestamp', dayEnd.toISOString());
       
-      const activeUsers = new Set(dayLogs?.map(l => l.user_id) || []).size;
+      const activeUsers = new Set(dayLogs?.map((l: { user_id: string }) => l.user_id) || []).size;
       
       // Count completed tasks this day
       const { data: dayTasks } = await supabase
@@ -141,7 +141,7 @@ export async function fetchAdminOverview(): Promise<{
         .gte('logged_at', dayStart.toISOString())
         .lte('logged_at', dayEnd.toISOString());
       
-      const studyHours = (dayStudy?.reduce((sum, log) => sum + (log.duration_minutes || 0), 0) || 0) / 60;
+      const studyHours = (dayStudy?.reduce((sum, log: { duration_minutes: any }) => sum + (log.duration_minutes || 0), 0) || 0) / 60;
       
       userActivityTrend.push({
         date: days[date.getDay()],
@@ -163,7 +163,7 @@ export async function fetchAdminOverview(): Promise<{
         timerSessionsCount,
         avgSessionDurationMinutes,
         calendarEventsCount: calendarEvents?.length || 0,
-        generalTasksCount: tasks?.filter(t => t.category === 'personal').length || 0
+        generalTasksCount: tasks?.filter((t: { category: string }) => t.category === 'personal').length || 0
       },
       subjectBreakdown,
       userActivityTrend
@@ -183,7 +183,7 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
 
   try {
     const { data: usersData } = await supabase.auth.admin.listUsers();
-    const allUsers = usersData || [];
+    const allUsers = (usersData?.users || []) as { id: string; email: string; user_metadata: { name: string; } }[];
     
     const { data: profiles } = await supabase
       .from('profiles')
@@ -197,7 +197,7 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
       .select('user_id, status');
     
     const taskCounts = new Map<string, { created: number; completed: number }>();
-    tasks?.forEach(task => {
+    tasks?.forEach((task: { user_id: string; status: string }) => {
       const existing = taskCounts.get(task.user_id) || { created: 0, completed: 0 };
       existing.created++;
       if (task.status === 'completed') existing.completed++;
@@ -210,7 +210,7 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
       .select('user_id');
     
     const calendarCounts = new Map<string, number>();
-    calendarEvents?.forEach(event => {
+    calendarEvents?.forEach((event: { user_id: string }) => {
       calendarCounts.set(event.user_id, (calendarCounts.get(event.user_id) || 0) + 1);
     });
     
@@ -220,7 +220,7 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
       .select('user_id, duration_minutes, source');
     
     const studyStats = new Map<string, { minutes: number; timerSessions: number }>();
-    studyLogs?.forEach(log => {
+    studyLogs?.forEach((log: { user_id: string; duration_minutes: any; source: string }) => {
       const existing = studyStats.get(log.user_id) || { minutes: 0, timerSessions: 0 };
       existing.minutes += log.duration_minutes || 0;
       if (log.source === 'timer') existing.timerSessions++;
@@ -234,13 +234,13 @@ export async function fetchAdminUsersList(): Promise<AdminUserSummary[]> {
       .order('timestamp', { ascending: false });
     
     const lastActivityMap = new Map<string, string>();
-    userLogs?.forEach(log => {
+    userLogs?.forEach((log: { user_id: string; timestamp: string }) => {
       if (!lastActivityMap.has(log.user_id)) {
         lastActivityMap.set(log.user_id, log.timestamp);
       }
     });
     
-    return allUsers.map(u => {
+    return allUsers.map((u: { id: string; email: string; user_metadata: { name: string; } }) => {
       const profile = profileMap.get(u.id);
       const taskCount = taskCounts.get(u.id) || { created: 0, completed: 0 };
       const studyStat = studyStats.get(u.id) || { minutes: 0, timerSessions: 0 };
@@ -291,17 +291,17 @@ export async function fetchUserActivityLogs(userId?: string, limit: number = 50)
     if (error) throw error;
 
     // Get user emails for mapping
-    const userIds = [...new Set(data?.map(l => l.user_id) || [])];
+    const userIds = [...new Set(data?.map((l: { user_id: string }) => l.user_id) || [])];
     const { data: usersData } = await supabase.auth.admin.listUsers();
-    const userMap = new Map(usersData?.map(u => [u.id, u.email]) || []);
+    const userMap = new Map(usersData?.map((u: { id: string; email: string }) => [u.id, u.email]) || []);
     
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, name')
       .in('id', userIds);
-    const profileMap = new Map(profiles?.map(p => [p.id, p.name]) || {});
+    const profileMap = new Map(profiles?.map((p: { id: string; name: string }) => [p.id, p.name]) || {});
     
-    return data?.map(log => ({
+    return data?.map((log: any) => ({
       id: log.id,
       userEmail: userMap.get(log.user_id) || log.user_id,
       userName: profileMap.get(log.user_id) || log.event_name || 'Unknown',
