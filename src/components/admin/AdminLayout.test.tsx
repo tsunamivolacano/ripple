@@ -1,9 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
-import { useRippleAuth } from '@/hooks/useRippleAuth';
-import { useRippleData } from '@/hooks/useRippleData';
-import { supabase } from '@/integrations/supabase/client';
 
 // Mock the ripple auth hook
 jest.mock('@/hooks/useRippleAuth', () => ({
@@ -39,26 +36,6 @@ jest.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-// Mock the activity logger
-jest.mock('@/services/activityLogger', () => ({
-  ActivityLogger: {
-    userLogin: jest.fn(),
-    userRegistered: jest.fn(),
-    userLogout: jest.fn(),
-    taskCreated: jest.fn(),
-    taskUpdated: jest.fn(),
-    taskDeleted: jest.fn(),
-    taskRenegotiated: jest.fn(),
-    studyLogAdded: jest.fn(),
-    studyLogDeleted: jest.fn(),
-    evidenceLogged: jest.fn(),
-    settingsUpdated: jest.fn(),
-    slotAdded: jest.fn(),
-    slotUpdated: jest.fn(),
-    slotDeleted: jest.fn(),
-  },
-}));
-
 // Mock storage utilities
 jest.mock('@/utils/storageUtils', () => ({
   safeGetStorage: jest.fn(),
@@ -73,91 +50,12 @@ jest.mock('@/data/ripplePersonaData', () => ({
       id: 'demo_riya',
       name: 'Riya Sharma',
       email: 'riya.sharma@demo.ripple',
-      slots: [
-        {
-          id: 'slot-1',
-          subject: 'Physics',
-          dayOfWeek: 'Monday',
-          startTime: '09:00',
-          endTime: '10:30',
-          room: 'Room 201',
-          teacherName: 'Dr. Patel',
-          strictnessTag: 'COLD_CALL',
-          stakesTag: 'GRADED_QUIZ',
-          weight: 85,
-          reminders: ['15m'],
-          recurrence: { type: 'none' },
-          specificDate: null,
-          notes: 'Focus on wave-particle duality',
-        },
-      ],
-      tasks: [
-        {
-          id: 'task-1',
-          title: 'Complete Wave Optics Problems',
-          description: 'Finish exercises 3.1-3.5',
-          slotId: 'slot-1',
-          hasDeadline: true,
-          dueDate: '2023-11-15T23:59:59Z',
-          estimatedHours: 5,
-          completionPercentage: 0,
-          taskType: 'problem_set',
-          category: 'academic',
-          status: 'manageable',
-          reminders: ['15m'],
-          recurrence: { type: 'none' },
-          createdAt: '2023-11-01T10:00:00Z',
-          completedAt: null,
-          renegotiatedCount: 0,
-          lastRenegotiated: null,
-        },
-      ],
-      evidenceEntries: [
-        {
-          id: 'ev-1',
-          taskId: 'task-1',
-          taskTitle: 'Complete Wave Optics Problems',
-          subject: 'Physics',
-          teacherName: 'Dr. Patel',
-          predictedScenario: 'Will struggle with interference equations',
-          actualOutcome: 'Completed with 92% accuracy',
-          wasOnTime: true,
-          accuracyRating: 4,
-          dateLogged: '2023-11-02T14:30:00Z',
-          userNotes: 'Need to review double-slit derivations',
-        },
-      ],
-      studyLogs: [
-        {
-          id: 'st-1',
-          subject: 'Physics',
-          durationMinutes: 90,
-          topic: 'Wave Optics & Double Slit Interference',
-          loggedAt: '2023-11-01T14:00:00Z',
-          source: 'manual',
-        },
-      ],
-      debt: {
-        totalHoursBehind: 0,
-        missedDeadlinesCount: 0,
-        streakDays: 0,
-        compoundingScore: 0,
-        weeklyDebtTrend: [
-          { day: 'Mon', debtHours: 0 },
-          { day: 'Tue', debtHours: 0 },
-          { day: 'Wed', debtHours: 0 },
-          { day: 'Thu', debtHours: 0 },
-          { day: 'Fri', debtHours: 0 },
-          { day: 'Sat', debtHours: 0 },
-          { day: 'Sun', debtHours: 0 },
-        ],
-      },
-      settings: {
-        intensityMode: 'standard',
-        isMinorProfile: false,
-        weeklyDigestOnly: false,
-        personalVelocityMultiplier: 1.0,
-      },
+      slots: [],
+      tasks: [],
+      evidenceEntries: [],
+      studyLogs: [],
+      debt: {},
+      settings: {},
     },
   },
   defaultPersona: {
@@ -173,7 +71,15 @@ jest.mock('@/data/ripplePersonaData', () => ({
       missedDeadlinesCount: 0,
       streakDays: 0,
       compoundingScore: 0,
-      weeklyDebtTrend: [],
+      weeklyDebtTrend: [
+        { day: 'Mon', debtHours: 0 },
+        { day: 'Tue', debtHours: 0 },
+        { day: 'Wed', debtHours: 0 },
+        { day: 'Thu', debtHours: 0 },
+        { day: 'Fri', debtHours: 0 },
+        { day: 'Sat', debtHours: 0 },
+        { day: 'Sun', debtHours: 0 },
+      ],
     },
     settings: {
       intensityMode: 'standard',
@@ -317,13 +223,13 @@ describe('Admin Dashboard End-to-End Flow', () => {
     }));
 
     (useRippleData as jest.Mock).mockImplementation(() => ({
-      slots: mockOverview.subjectBreakdown[0]?.subject ? mockOverview.subjectBreakdown[0].slots : [],
-      tasks: mockOverview.subjectBreakdown[0]?.subject ? mockOverview.subjectBreakdown[0].tasks : [],
-      evidenceEntries: mockOverview.subjectBreakdown[0]?.subject ? mockOverview.subjectBreakdown[0].evidenceEntries : [],
-      studyLogs: mockOverview.subjectBreakdown[0]?.subject ? mockOverview.subjectBreakdown[0].studyLogs : [],
-      debt: mockOverview.subjectBreakdown[0]?.subject ? mockOverview.subjectBreakdown[0].debt : {},
-      settings: mockOverview.subjectBreakdown[0]?.subject ? mockOverview.subjectBreakdown[0].settings : {},
-      notificationSettings: mockOverview.subjectBreakdown[0]?.subject ? mockOverview.subjectBreakdown[0].notificationSettings : {},
+      slots: mockOverview.subjectBreakdown[0]?.slots || [],
+      tasks: mockOverview.subjectBreakdown[0]?.tasks || [],
+      evidenceEntries: mockOverview.subjectBreakdown[0]?.evidenceEntries || [],
+      studyLogs: mockOverview.subjectBreakdown[0]?.studyLogs || [],
+      debt: mockOverview.subjectBreakdown[0]?.debt || {},
+      settings: mockOverview.subjectBreakdown[0]?.settings || {},
+      notificationSettings: mockOverview.subjectBreakdown[0]?.notificationSettings || {},
       currentPersonaId: 'riya',
       activeTaskForPrediction: null,
       activeFocusTask: null,
