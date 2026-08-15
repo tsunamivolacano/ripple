@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Task } from '@/types/ripple';
 import { useRipple } from '@/context/RippleContext';
 import { 
   Play, 
   Pause, 
   CheckCircle2, 
-  Clock, 
   Sparkles, 
   RotateCcw,
-  BookOpen
+  BookOpen,
+  Minimize2,
+  X
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -24,23 +25,25 @@ interface FocusModeModalProps {
 const TIMER_PRESETS = [15, 25, 30, 45, 60];
 
 export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose }) => {
-  const { updateTaskProgress, completeTask, addStudyLog, slots } = useRipple();
+  const { 
+    updateTaskProgress, 
+    completeTask, 
+    slots,
+    activeTimer,
+    startGlobalTimer,
+    pauseGlobalTimer,
+    resumeGlobalTimer,
+    resetGlobalTimer,
+    setTimerMinimized,
+    stopAndLogTimer,
+    cancelGlobalTimer
+  } = useRipple();
 
-  // Timer configuration states
   const [selectedPreset, setSelectedPreset] = useState<number>(25);
   const [customMinutes, setCustomMinutes] = useState<number>(25);
   const [subject, setSubject] = useState<string>('General Study');
-
-  // Timer running states
-  const [totalSeconds, setTotalSeconds] = useState<number>(25 * 60);
-  const [secondsLeft, setSecondsLeft] = useState<number>(25 * 60);
-  const [isRunning, setIsRunning] = useState<boolean>(false);
   const [localProgress, setLocalProgress] = useState<number>(0);
 
-  // Absolute target timestamp reference
-  const targetEndTimeRef = useRef<number | null>(null);
-
-  // Extract available subjects from slots
   const availableSubjects = Array.from(
     new Set([
       ...slots.map((s) => s.subject),
@@ -61,22 +64,34 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
       } else {
         setSubject('General Study');
       }
-      setSelectedPreset(25);
-      setTotalSeconds(25 * 60);
-      setSecondsLeft(25 * 60);
-      setIsRunning(false);
-      targetEndTimeRef.current = null;
-    }
-  }, [task, slots]);
 
-  // Duration change handler
+      // If no global timer is active for this task, prime it
+      if (!activeTimer || activeTimer.taskId !== task.id) {
+        setSelectedPreset(25);
+        setCustomMinutes(25);
+      }
+    }
+  }, [task, slots, activeTimer]);
+
+  if (!task) return null;
+
+  // Derive current timer display values
+  const isTimerForThisTask = activeTimer && activeTimer.taskId === task.id;
+  const isRunning = isTimerForThisTask ? activeTimer.isRunning : false;
+  const secondsLeft = isTimerForThisTask ? activeTimer.secondsLeft : selectedPreset * 60;
+  const totalSeconds = isTimerForThisTask ? activeTimer.totalSeconds : selectedPreset * 60;
+
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = secondsLeft % 60;
+  const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
   const handleSelectDuration = (mins: number) => {
     if (isRunning) return;
     setSelectedPreset(mins);
     setCustomMinutes(mins);
-    const secs = mins * 60;
-    setTotalSeconds(secs);
-    setSecondsLeft(secs);
+    if (isTimerForThisTask) {
+      resetGlobalTimer(mins);
+    }
   };
 
   const handleCustomMinutesChange = (val: number) => {
@@ -84,86 +99,51 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
     const mins = Math.max(1, Math.min(180, val));
     setSelectedPreset(mins);
     setCustomMinutes(mins);
-    const secs = mins * 60;
-    setTotalSeconds(secs);
-    setSecondsLeft(secs);
+    if (isTimerForThisTask) {
+      resetGlobalTimer(mins);
+    }
   };
 
-  // Toggle Timer Run / Pause
   const toggleStartPause = () => {
-    if (isRunning) {
-      // Pause
-      setIsRunning(false);
-      targetEndTimeRef.current = null;
+    if (!isTimerForThisTask) {
+      // Start fresh global timer
+      startGlobalTimer({
+        taskId: task.id,
+        taskTitle: task.title,
+        subject: subject || 'General Study',
+        durationMinutes: selectedPreset,
+        isMinimized: false
+      });
     } else {
-      // Start - Record absolute target end time
-      const now = Date.now();
-      targetEndTimeRef.current = now + secondsLeft * 1000;
-      setIsRunning(true);
+      if (activeTimer.isRunning) {
+        pauseGlobalTimer();
+      } else {
+        resumeGlobalTimer();
+      }
     }
   };
 
-  // Reset Timer
   const handleReset = () => {
-    setIsRunning(false);
-    targetEndTimeRef.current = null;
-    setSecondsLeft(totalSeconds);
+    if (isTimerForThisTask) {
+      resetGlobalTimer(selectedPreset);
+    }
   };
 
-  // Timestamp-based ticking logic (Handles backgrounding & screen lock accurately)
-  useEffect(() => {
-    let interval: any = null;
-
-    if (isRunning && targetEndTimeRef.current) {
-      const updateTimer = () => {
-        const now = Date.now();
-        const diffMs = targetEndTimeRef.current! - now;
-        const remaining = Math.max(0, Math.ceil(diffMs / 1000));
-
-        setSecondsLeft(remaining);
-
-        if (remaining <= 0) {
-          setIsRunning(false);
-          targetEndTimeRef.current = null;
-          clearInterval(interval);
-
-          // Auto-log completed study session!
-          const elapsedMins = Math.round(totalSeconds / 60);
-          if (elapsedMins > 0) {
-            addStudyLog({
-              subject: subject || 'General Study',
-              durationMinutes: elapsedMins,
-              topic: task ? `Focus Sprint: ${task.title}` : undefined,
-              source: 'timer'
-            });
-          }
-        }
-      };
-
-      updateTimer();
-      interval = setInterval(updateTimer, 500);
-
-      // Listen to tab visibility recovery
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible' && isRunning && targetEndTimeRef.current) {
-          updateTimer();
-        }
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      return () => {
-        clearInterval(interval);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
+  const handleMinimize = () => {
+    // If not started yet, auto-start and minimize so user doesn't lose context
+    if (!isTimerForThisTask) {
+      startGlobalTimer({
+        taskId: task.id,
+        taskTitle: task.title,
+        subject: subject || 'General Study',
+        durationMinutes: selectedPreset,
+        isMinimized: true
+      });
+    } else {
+      setTimerMinimized(true);
     }
-  }, [isRunning, totalSeconds, subject, task, addStudyLog]);
-
-  if (!task) return null;
-
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = secondsLeft % 60;
-  const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    onClose();
+  };
 
   const handleProgressChange = (val: number[]) => {
     const newProgress = val[0];
@@ -172,34 +152,49 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
   };
 
   const handleMarkComplete = () => {
-    // Log remaining timer progress if timer was run
-    const elapsedMins = Math.round((totalSeconds - secondsLeft) / 60);
-    if (elapsedMins > 0) {
-      addStudyLog({
-        subject: subject || 'General Study',
-        durationMinutes: elapsedMins,
-        topic: `Completed task: ${task.title}`,
-        source: 'timer'
-      });
+    if (isTimerForThisTask) {
+      stopAndLogTimer();
     }
-
     completeTask(task.id);
     onClose();
   };
 
+  const handleCloseDialog = () => {
+    // If running, minimize instead of discarding
+    if (isRunning) {
+      setTimerMinimized(true);
+    }
+    onClose();
+  };
+
   return (
-    <Dialog open={!!task} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-950 border-emerald-500/40 text-white max-w-md rounded-2xl text-center p-6">
-        <DialogHeader>
-          <div className="mx-auto w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2 border border-emerald-500/30">
-            <Sparkles className="w-5 h-5" />
+    <Dialog open={!!task && (!activeTimer || !activeTimer.isMinimized)} onOpenChange={handleCloseDialog}>
+      <DialogContent className="bg-slate-950 border-emerald-500/40 text-white max-w-md rounded-2xl text-center p-6 shadow-2xl">
+        <DialogHeader className="flex flex-row items-center justify-between pb-2 border-b border-slate-800">
+          <div className="flex items-center gap-2 text-left">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-bold text-white leading-tight">
+                Focus Sprint Mode
+              </DialogTitle>
+              <span className="text-[11px] text-emerald-400 font-mono">
+                {task.title}
+              </span>
+            </div>
           </div>
-          <DialogTitle className="text-lg font-bold text-white">
-            Focus Sprint: {task.title}
-          </DialogTitle>
-          <p className="text-xs text-slate-400">
-            Timers use exact target timestamps so progress continues accurately in the background.
-          </p>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleMinimize}
+            className="border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-emerald-300 gap-1.5 h-8 px-2.5 rounded-xl shrink-0"
+            title="Minimize to floating widget and keep running in background"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>Minimize</span>
+          </Button>
         </DialogHeader>
 
         {/* Subject & Duration Preset Selection */}
@@ -207,7 +202,7 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
           <div className="space-y-1">
             <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
               <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-              Link Session to Subject (Auto-logs Study Hours)
+              Subject Link (Auto-logs Study Tracker)
             </label>
             <Select value={subject} onValueChange={setSubject} disabled={isRunning}>
               <SelectTrigger className="bg-slate-950 border-slate-800 text-xs text-white h-8">
@@ -233,7 +228,7 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
                   onClick={() => handleSelectDuration(mins)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                     selectedPreset === mins
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-emerald-600 text-white shadow-md'
                       : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
                   }`}
                 >
@@ -257,12 +252,12 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
           </div>
         </div>
 
-        {/* Big Digital Timer Display */}
-        <div className="my-4 p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-inner">
-          <div className="font-mono text-5xl font-extrabold text-emerald-400 tracking-wider drop-shadow">
+        {/* Digital Clock Display with subtle glow */}
+        <div className="my-4 p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-inner relative overflow-hidden">
+          <div className="font-mono text-5xl font-extrabold text-emerald-400 tracking-wider drop-shadow-md">
             {formattedTime}
           </div>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2">
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2 font-mono">
             {isRunning ? `Focusing on ${subject}` : 'Sprint Ready'}
           </p>
 
@@ -272,7 +267,7 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
               onClick={toggleStartPause}
               className={`${
                 isRunning ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
-              } text-white font-semibold text-xs gap-1.5 px-6 h-9`}
+              } text-white font-semibold text-xs gap-1.5 px-6 h-9 rounded-xl shadow-lg shadow-emerald-950/60`}
             >
               {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
               {isRunning ? 'Pause Sprint' : `Start ${selectedPreset}m Timer`}
@@ -282,14 +277,15 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
               variant="outline"
               size="icon"
               onClick={handleReset}
-              className="border-slate-800 bg-slate-950 text-slate-400 hover:text-white h-9 w-9"
+              className="border-slate-800 bg-slate-950 text-slate-400 hover:text-white h-9 w-9 rounded-xl"
+              title="Reset Timer"
             >
               <RotateCcw className="w-4 h-4" />
             </Button>
           </div>
         </div>
 
-        {/* Live Progress Adjustment Slider */}
+        {/* Progress Slider */}
         <div className="space-y-3 text-left p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
           <div className="flex items-center justify-between text-xs font-semibold">
             <span className="text-slate-300">Task Completion Progress:</span>
@@ -311,17 +307,18 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-3">
-          <Button variant="ghost" onClick={onClose} className="text-slate-400 hover:text-white text-xs">
-            Exit
+        {/* Footer Actions */}
+        <div className="mt-5 flex items-center justify-between gap-3 pt-2 border-t border-slate-800">
+          <Button variant="ghost" onClick={handleMinimize} className="text-slate-400 hover:text-white text-xs">
+            Minimize to Background
           </Button>
 
           <Button
             onClick={handleMarkComplete}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 rounded-xl"
           >
             <CheckCircle2 className="w-4 h-4" />
-            Mark Task 100% Complete
+            Mark 100% Complete & Save
           </Button>
         </div>
       </DialogContent>

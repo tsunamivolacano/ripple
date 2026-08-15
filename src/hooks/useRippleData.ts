@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   TimetableSlot, 
   Task, 
   EvidenceEntry, 
-  StudyLog,
+  StudyLog, 
   ProcrastinationDebt, 
-  UserSettings,
-  NotificationSettings
+  UserSettings, 
+  NotificationSettings,
+  ActiveTimerState 
 } from '@/types/ripple';
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { safeGetStorage, safeSetStorage } from '@/utils/storageUtils';
@@ -88,6 +89,18 @@ export function useRippleData(currentUser: UserAccount | null) {
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
   const [isNotificationModalOpen, setNotificationModalOpen] = useState<boolean>(false);
 
+  // Global Active Background Timer
+  const [activeTimer, setActiveTimer] = useState<ActiveTimerState | null>(() => {
+    return safeGetStorage<ActiveTimerState | null>('ripple_active_timer', null);
+  });
+
+  // Keep ref to avoid stale closures in tick loops
+  const activeTimerRef = useRef<ActiveTimerState | null>(activeTimer);
+  useEffect(() => {
+    activeTimerRef.current = activeTimer;
+    safeSetStorage('ripple_active_timer', activeTimer);
+  }, [activeTimer]);
+
   // Load account data when currentUser changes
   useEffect(() => {
     if (!currentUser) {
@@ -136,7 +149,7 @@ export function useRippleData(currentUser: UserAccount | null) {
     setIsLoadingData(false);
   }, [currentUser?.id]);
 
-  // Sync changes to storage
+  // Sync data to storage
   useEffect(() => {
     if (currentUser && !currentUser.isDemo) {
       const uKey = currentUser.id;
@@ -150,7 +163,49 @@ export function useRippleData(currentUser: UserAccount | null) {
     }
   }, [currentUser, slots, tasks, evidenceEntries, studyLogs, debt, settings, notificationSettings]);
 
-  // Dynamic task status ticker
+  // Global Timestamp Ticker for Background Timer
+  useEffect(() => {
+    const timerInterval = setInterval(() => {
+      const current = activeTimerRef.current;
+      if (!current || !current.isRunning || !current.targetEndTime) return;
+
+      const now = Date.now();
+      const remainingMs = current.targetEndTime - now;
+      const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      if (secondsLeft <= 0) {
+        // Finished! Auto-log session and complete
+        const loggedMins = current.initialDurationMinutes || Math.round(current.totalSeconds / 60);
+        addStudyLog({
+          subject: current.subject || 'General Study',
+          durationMinutes: Math.max(1, loggedMins),
+          topic: `Completed Sprint: ${current.taskTitle}`,
+          source: 'timer'
+        });
+
+        // Trigger sound notification if permitted
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification(`🎉 Focus Sprint Completed!`, {
+              body: `Great job! You finished your ${loggedMins}-minute focus block for "${current.taskTitle}".`,
+              icon: '/placeholder.svg'
+            });
+          } catch {}
+        }
+
+        showSuccess(`🎯 Sprint Complete! Logged +${loggedMins}m of study time.`);
+
+        // Close or reset active timer
+        setActiveTimer(null);
+      } else {
+        setActiveTimer((prev) => (prev ? { ...prev, secondsLeft } : null));
+      }
+    }, 500);
+
+    return () => clearInterval(timerInterval);
+  }, []);
+
+  // Status auto-refresh ticker every 30s
   useEffect(() => {
     const timer = setInterval(() => {
       setTasks((prevTasks) =>
@@ -169,6 +224,100 @@ export function useRippleData(currentUser: UserAccount | null) {
     }, 30000);
     return () => clearInterval(timer);
   }, [settings.personalVelocityMultiplier]);
+
+  // Timer Control Functions
+  const startGlobalTimer = (params: {
+    taskId?: string;
+    taskTitle: string;
+    subject: string;
+    durationMinutes: number;
+    isMinimized?: boolean;
+  }) => {
+    const totalSecs = params.durationMinutes * 60;
+    const now = Date.now();
+    const targetEnd = now + totalSecs * 1000;
+
+    const timerObj: ActiveTimerState = {
+      id: `timer-${now}`,
+      taskId: params.taskId,
+      taskTitle: params.taskTitle,
+      subject: params.subject,
+      totalSeconds: totalSecs,
+      secondsLeft: totalSecs,
+      isRunning: true,
+      targetEndTime: targetEnd,
+      startedAt: now,
+      initialDurationMinutes: params.durationMinutes,
+      isMinimized: params.isMinimized ?? false
+    };
+
+    setActiveTimer(timerObj);
+  };
+
+  const pauseGlobalTimer = () => {
+    setActiveTimer((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        isRunning: false,
+        targetEndTime: null
+      };
+    });
+  };
+
+  const resumeGlobalTimer = () => {
+    setActiveTimer((prev) => {
+      if (!prev) return null;
+      const now = Date.now();
+      return {
+        ...prev,
+        isRunning: true,
+        targetEndTime: now + prev.secondsLeft * 1000
+      };
+    });
+  };
+
+  const resetGlobalTimer = (newDurationMinutes?: number) => {
+    setActiveTimer((prev) => {
+      if (!prev) return null;
+      const mins = newDurationMinutes || prev.initialDurationMinutes;
+      const secs = mins * 60;
+      return {
+        ...prev,
+        totalSeconds: secs,
+        secondsLeft: secs,
+        initialDurationMinutes: mins,
+        isRunning: false,
+        targetEndTime: null
+      };
+    });
+  };
+
+  const setTimerMinimized = (minimized: boolean) => {
+    setActiveTimer((prev) => (prev ? { ...prev, isMinimized: minimized } : null));
+  };
+
+  const stopAndLogTimer = () => {
+    const current = activeTimer;
+    if (!current) return;
+
+    const elapsedSeconds = current.totalSeconds - current.secondsLeft;
+    const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+
+    addStudyLog({
+      subject: current.subject || 'General Study',
+      durationMinutes: elapsedMinutes,
+      topic: `Focus Session: ${current.taskTitle}`,
+      source: 'timer'
+    });
+
+    setActiveTimer(null);
+    showSuccess(`Logged +${elapsedMinutes}m study session.`);
+  };
+
+  const cancelGlobalTimer = () => {
+    setActiveTimer(null);
+  };
 
   const addSlot = async (slotData: Omit<TimetableSlot, 'id'>) => {
     if (!currentUser) return;
@@ -327,7 +476,6 @@ export function useRippleData(currentUser: UserAccount | null) {
       loggedAt: new Date().toISOString()
     };
     setStudyLogs((prev) => [newLog, ...prev]);
-    showSuccess(`Logged ${newLog.durationMinutes} minutes of study for ${newLog.subject}!`);
   };
 
   const deleteStudyLog = async (id: string) => {
@@ -366,6 +514,7 @@ export function useRippleData(currentUser: UserAccount | null) {
     setEvidenceEntries([]);
     setStudyLogs([]);
     setDebt(emptyDebt);
+    setActiveTimer(null);
     showSuccess('All data reset for active account.');
   };
 
@@ -383,6 +532,14 @@ export function useRippleData(currentUser: UserAccount | null) {
     completedTaskForCelebration,
     isLoadingData,
     isNotificationModalOpen,
+    activeTimer,
+    startGlobalTimer,
+    pauseGlobalTimer,
+    resumeGlobalTimer,
+    resetGlobalTimer,
+    setTimerMinimized,
+    stopAndLogTimer,
+    cancelGlobalTimer,
     setNotificationModalOpen,
     setActiveTaskForPrediction,
     setActiveFocusTask,

@@ -16,6 +16,7 @@ import { NewTaskModal } from '@/components/task/NewTaskModal';
 import { NotificationSettingsModal } from '@/components/settings/NotificationSettingsModal';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot';
+import { FloatingTimerWidget } from '@/components/timer/FloatingTimerWidget';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Task } from '@/types/ripple';
 import { Shield, Eye, LogOut } from 'lucide-react';
@@ -90,7 +91,7 @@ const RippleAppContent: React.FC = () => {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 pb-24">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 pb-28">
         {activeTab === 'warroom' && (
           <WarRoom
             onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
@@ -115,6 +116,9 @@ const RippleAppContent: React.FC = () => {
 
         {activeTab === 'debt' && <DebtLedgerView />}
       </main>
+
+      {/* Floating Minimizable Background Timer Widget */}
+      <FloatingTimerWidget />
 
       {/* Interactive AI Assistant Chatbot */}
       <RippleAssistantChatbot />

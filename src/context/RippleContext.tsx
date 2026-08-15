@@ -3,13 +3,14 @@ import {
   TimetableSlot, 
   Task, 
   EvidenceEntry, 
-  StudyLog,
+  StudyLog, 
   ProcrastinationDebt, 
-  UserSettings,
-  NotificationSettings
+  UserSettings, 
+  NotificationSettings,
+  ActiveTimerState 
 } from '@/types/ripple';
 import { AdminUserSummary } from '@/types/admin';
-import { isAuthorizedAdmin, logAdminAuditAction, AUTHORIZED_ADMIN_EMAIL } from '@/services/adminService';
+import { isAuthorizedAdmin, logAdminAuditAction } from '@/services/adminService';
 import { useRippleAuth, UserAccount, AuthResponse } from '@/hooks/useRippleAuth';
 import { useRippleTutorial } from '@/hooks/useRippleTutorial';
 import { useRippleData } from '@/hooks/useRippleData';
@@ -32,6 +33,22 @@ interface RippleContextType {
   activeFocusTask: Task | null;
   completedTaskForCelebration: Task | null;
   isLoadingData: boolean;
+
+  // Background Timer System
+  activeTimer: ActiveTimerState | null;
+  startGlobalTimer: (params: {
+    taskId?: string;
+    taskTitle: string;
+    subject: string;
+    durationMinutes: number;
+    isMinimized?: boolean;
+  }) => void;
+  pauseGlobalTimer: () => void;
+  resumeGlobalTimer: () => void;
+  resetGlobalTimer: (newDurationMinutes?: number) => void;
+  setTimerMinimized: (minimized: boolean) => void;
+  stopAndLogTimer: () => void;
+  cancelGlobalTimer: () => void;
 
   // Admin & Support Impersonation State
   isAdmin: boolean;
@@ -112,7 +129,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const startImpersonatingUser = (user: AdminUserSummary) => {
     if (!isAdmin) return;
     setImpersonatedUser(user);
-    setAdminView(false); // Switch to student app view with support banner
+    setAdminView(false);
     showSuccess(`Viewing app as ${user.name}`);
   };
 
@@ -121,7 +138,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       logAdminAuditAction('IMPERSONATE_USER_END', impersonatedUser.id, impersonatedUser.email, `Exited Support Mode for ${impersonatedUser.email}`);
     }
     setImpersonatedUser(null);
-    setAdminView(true); // Return to Admin Command Center
+    setAdminView(true);
     showSuccess('Exited Support Mode. Returned to Admin Dashboard.');
   };
 
@@ -163,6 +180,16 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         completedTaskForCelebration: data.completedTaskForCelebration,
         isLoadingData: data.isLoadingData,
         isNotificationModalOpen: data.isNotificationModalOpen,
+
+        activeTimer: data.activeTimer,
+        startGlobalTimer: data.startGlobalTimer,
+        pauseGlobalTimer: data.pauseGlobalTimer,
+        resumeGlobalTimer: data.resumeGlobalTimer,
+        resetGlobalTimer: data.resetGlobalTimer,
+        setTimerMinimized: data.setTimerMinimized,
+        stopAndLogTimer: data.stopAndLogTimer,
+        cancelGlobalTimer: data.cancelGlobalTimer,
+
         setNotificationModalOpen: data.setNotificationModalOpen,
         setActiveTaskForPrediction: data.setActiveTaskForPrediction,
         setActiveFocusTask: data.setActiveFocusTask,

@@ -179,3 +179,17 @@ export interface UserSettings {
   weeklyDigestOnly: boolean;
   personalVelocityMultiplier: number; // e.g. 1.2x
 }
+
+export interface ActiveTimerState {
+  id: string;
+  taskId?: string;
+  taskTitle: string;
+  subject: string;
+  totalSeconds: number;
+  secondsLeft: number;
+  isRunning: boolean;
+  targetEndTime: number | null; // epoch timestamp ms
+  startedAt: number; // epoch timestamp ms
+  initialDurationMinutes: number;
+  isMinimized: boolean;
+}
