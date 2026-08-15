@@ -19,7 +19,7 @@ import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot
 import { FloatingTimerWidget } from '@/components/timer/FloatingTimerWidget';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Task } from '@/types/ripple';
-import { Shield, Eye, LogOut } from 'lucide-react';
+import { Shield, Eye, LogOut, Loader2, CloudCheck, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const RippleAppContent: React.FC = () => {
@@ -38,7 +38,8 @@ const RippleAppContent: React.FC = () => {
     setNotificationModalOpen,
     setActiveTaskForPrediction,
     setActiveFocusTask,
-    setCompletedTaskForCelebration
+    setCompletedTaskForCelebration,
+    isLoadingData
   } = useRipple();
 
   const [activeTab, setActiveTab] = useState('warroom');
@@ -92,29 +93,40 @@ const RippleAppContent: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 pb-28">
-        {activeTab === 'warroom' && (
-          <WarRoom
-            onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
-            onOpenFocus={(t) => setActiveFocusTask(t)}
-            onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
-          />
+        {isLoadingData ? (
+          <div className="flex flex-col items-center justify-center py-24 space-y-3">
+            <Loader2 className="w-8 h-8 text-rose-500 animate-spin" />
+            <p className="text-xs font-mono text-slate-400">
+              Syncing user data from secure database...
+            </p>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'warroom' && (
+              <WarRoom
+                onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
+                onOpenFocus={(t) => setActiveFocusTask(t)}
+                onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+              />
+            )}
+
+            {activeTab === 'study' && <StudyTrackerView />}
+
+            {activeTab === 'calendar' && (
+              <CalendarView
+                onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
+                onOpenFocus={(t) => setActiveFocusTask(t)}
+                onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+              />
+            )}
+
+            {activeTab === 'timetable' && <TimetableGrid />}
+
+            {activeTab === 'evidence' && <EvidenceLogView />}
+
+            {activeTab === 'debt' && <DebtLedgerView />}
+          </>
         )}
-
-        {activeTab === 'study' && <StudyTrackerView />}
-
-        {activeTab === 'calendar' && (
-          <CalendarView
-            onOpenPrediction={(t) => setActiveTaskForPrediction(t)}
-            onOpenFocus={(t) => setActiveFocusTask(t)}
-            onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
-          />
-        )}
-
-        {activeTab === 'timetable' && <TimetableGrid />}
-
-        {activeTab === 'evidence' && <EvidenceLogView />}
-
-        {activeTab === 'debt' && <DebtLedgerView />}
       </main>
 
       {/* Floating Minimizable Background Timer Widget */}

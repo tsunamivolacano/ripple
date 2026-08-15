@@ -12,35 +12,31 @@ import {
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { safeGetStorage, safeSetStorage } from '@/utils/storageUtils';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
 import { 
   scheduleTaskNotifications, 
   scheduleClassNotifications, 
   cancelItemNotifications, 
   getNextSlotDateISO 
 } from '@/utils/notificationService';
+import { 
+  loadUserCloudData,
+  syncTaskInsert,
+  syncTaskUpdate,
+  syncTaskDelete,
+  syncSlotInsert,
+  syncSlotUpdate,
+  syncSlotDelete,
+  syncStudyLogInsert,
+  syncStudyLogDelete,
+  syncEvidenceInsert,
+  syncDebtUpsert,
+  syncUserSettings,
+  syncNotificationSettings
+} from '@/services/databaseSyncService';
 import { UserAccount } from './useRippleAuth';
 
 const defaultPersona = PERSONAS_MAP['riya'];
-
-const initialStudyLogs: StudyLog[] = [
-  {
-    id: 'st-1',
-    subject: 'Physics',
-    durationMinutes: 90,
-    topic: 'Wave Optics & Double Slit Interference',
-    loggedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    source: 'manual'
-  },
-  {
-    id: 'st-2',
-    subject: 'Mathematics',
-    durationMinutes: 60,
-    topic: 'Calculus Definite Integration Problems',
-    loggedAt: new Date(Date.now() - 3600000 * 20).toISOString(),
-    source: 'timer'
-  }
-];
 
 const emptyDebt: ProcrastinationDebt = {
   totalHoursBehind: 0,
@@ -73,7 +69,8 @@ const defaultNotificationSettings: NotificationSettings = {
 };
 
 export function useRippleData(currentUser: UserAccount | null) {
-  const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [currentPersonaId, setCurrentPersonaId] = useState<string>('riya');
   
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
@@ -94,64 +91,76 @@ export function useRippleData(currentUser: UserAccount | null) {
     return safeGetStorage<ActiveTimerState | null>('ripple_active_timer', null);
   });
 
-  // Keep ref to avoid stale closures in tick loops
   const activeTimerRef = useRef<ActiveTimerState | null>(activeTimer);
   useEffect(() => {
     activeTimerRef.current = activeTimer;
     safeSetStorage('ripple_active_timer', activeTimer);
   }, [activeTimer]);
 
-  // Load account data when currentUser changes
+  // Load account data when currentUser changes (Cloud-first with cached fallback)
   useEffect(() => {
-    if (!currentUser) {
-      setSlots([]);
-      setTasks([]);
-      setEvidenceEntries([]);
-      setStudyLogs([]);
-      setDebt(emptyDebt);
-      setSettings(emptySettings);
-      return;
+    let isCancelled = false;
+
+    async function initializeUserData() {
+      if (!currentUser) {
+        setSlots([]);
+        setTasks([]);
+        setEvidenceEntries([]);
+        setStudyLogs([]);
+        setDebt(emptyDebt);
+        setSettings(emptySettings);
+        setIsLoadingData(false);
+        return;
+      }
+
+      setIsLoadingData(true);
+
+      // Demo Persona account
+      if (currentUser.isDemo && currentUser.demoPersonaId) {
+        const persona = PERSONAS_MAP[currentUser.demoPersonaId] || defaultPersona;
+        setSlots(persona.slots);
+        setTasks(persona.tasks);
+        setEvidenceEntries(persona.evidenceEntries);
+        setStudyLogs([]);
+        setDebt(persona.debt);
+        setSettings(persona.settings);
+        setNotificationSettings(defaultNotificationSettings);
+        setCurrentPersonaId(persona.id);
+        setIsLoadingData(false);
+        return;
+      }
+
+      // Live Authenticated User: Load from Supabase Cloud directly
+      try {
+        const cloudData = await loadUserCloudData(currentUser.id);
+        if (!isCancelled) {
+          setSlots(cloudData.slots);
+          setTasks(cloudData.tasks);
+          setEvidenceEntries(cloudData.evidenceEntries);
+          setStudyLogs(cloudData.studyLogs);
+          setDebt(cloudData.debt);
+          setSettings(cloudData.settings);
+          setNotificationSettings(cloudData.notificationSettings);
+        }
+      } catch (e) {
+        console.error('[useRippleData] Error loading cloud data:', e);
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingData(false);
+        }
+      }
     }
 
-    setIsLoadingData(true);
-    const uKey = currentUser.id;
+    initializeUserData();
 
-    if (currentUser.isDemo && currentUser.demoPersonaId) {
-      const persona = PERSONAS_MAP[currentUser.demoPersonaId] || defaultPersona;
-      setSlots(persona.slots);
-      setTasks(persona.tasks);
-      setEvidenceEntries(persona.evidenceEntries);
-      setStudyLogs(initialStudyLogs);
-      setDebt(persona.debt);
-      setSettings(persona.settings);
-      setNotificationSettings(defaultNotificationSettings);
-      setCurrentPersonaId(persona.id);
-      setIsLoadingData(false);
-      return;
-    }
-
-    const localSlots = safeGetStorage<TimetableSlot[] | null>(`ripple_slots_${uKey}`, null);
-    const localTasks = safeGetStorage<Task[] | null>(`ripple_tasks_${uKey}`, null);
-    const localEvidence = safeGetStorage<EvidenceEntry[] | null>(`ripple_evidence_${uKey}`, null);
-    const localStudy = safeGetStorage<StudyLog[] | null>(`ripple_study_${uKey}`, null);
-    const localDebt = safeGetStorage<ProcrastinationDebt | null>(`ripple_debt_${uKey}`, null);
-    const localSettings = safeGetStorage<UserSettings | null>(`ripple_settings_${uKey}`, null);
-    const localNotifSettings = safeGetStorage<NotificationSettings | null>(`ripple_notif_settings_${uKey}`, null);
-
-    setSlots(localSlots !== null ? localSlots : []);
-    setTasks(localTasks !== null ? localTasks : []);
-    setEvidenceEntries(localEvidence !== null ? localEvidence : []);
-    setStudyLogs(localStudy !== null ? localStudy : initialStudyLogs);
-    setDebt(localDebt !== null ? localDebt : emptyDebt);
-    setSettings(localSettings !== null ? localSettings : emptySettings);
-    setNotificationSettings(localNotifSettings !== null ? localNotifSettings : defaultNotificationSettings);
-
-    setIsLoadingData(false);
+    return () => {
+      isCancelled = true;
+    };
   }, [currentUser?.id]);
 
-  // Sync data to storage
+  // Local storage persistence backup for offline resilience
   useEffect(() => {
-    if (currentUser && !currentUser.isDemo) {
+    if (currentUser && !currentUser.isDemo && !isLoadingData) {
       const uKey = currentUser.id;
       safeSetStorage(`ripple_slots_${uKey}`, slots);
       safeSetStorage(`ripple_tasks_${uKey}`, tasks);
@@ -161,7 +170,7 @@ export function useRippleData(currentUser: UserAccount | null) {
       safeSetStorage(`ripple_settings_${uKey}`, settings);
       safeSetStorage(`ripple_notif_settings_${uKey}`, notificationSettings);
     }
-  }, [currentUser, slots, tasks, evidenceEntries, studyLogs, debt, settings, notificationSettings]);
+  }, [currentUser, slots, tasks, evidenceEntries, studyLogs, debt, settings, notificationSettings, isLoadingData]);
 
   // Global Timestamp Ticker for Background Timer
   useEffect(() => {
@@ -174,7 +183,6 @@ export function useRippleData(currentUser: UserAccount | null) {
       const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
 
       if (secondsLeft <= 0) {
-        // Finished! Auto-log session and complete
         const loggedMins = current.initialDurationMinutes || Math.round(current.totalSeconds / 60);
         addStudyLog({
           subject: current.subject || 'General Study',
@@ -183,7 +191,6 @@ export function useRippleData(currentUser: UserAccount | null) {
           source: 'timer'
         });
 
-        // Trigger sound notification if permitted
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
             new Notification(`🎉 Focus Sprint Completed!`, {
@@ -194,8 +201,6 @@ export function useRippleData(currentUser: UserAccount | null) {
         }
 
         showSuccess(`🎯 Sprint Complete! Logged +${loggedMins}m of study time.`);
-
-        // Close or reset active timer
         setActiveTimer(null);
       } else {
         setActiveTimer((prev) => (prev ? { ...prev, secondsLeft } : null));
@@ -203,7 +208,7 @@ export function useRippleData(currentUser: UserAccount | null) {
     }, 500);
 
     return () => clearInterval(timerInterval);
-  }, []);
+  }, [currentUser]);
 
   // Status auto-refresh ticker every 30s
   useEffect(() => {
@@ -325,15 +330,23 @@ export function useRippleData(currentUser: UserAccount | null) {
     const updatedSlots = [...slots, newSlot];
     setSlots(updatedSlots);
 
+    if (!currentUser.isDemo) {
+      await syncSlotInsert(currentUser.id, newSlot);
+    }
+
     const nextClassISO = getNextSlotDateISO(newSlot.dayOfWeek, newSlot.startTime);
     await scheduleClassNotifications(currentUser.id, newSlot, nextClassISO, notificationSettings);
-    showSuccess(`Timetable slot for ${newSlot.subject} created with reminders.`);
+    showSuccess(`Timetable slot for ${newSlot.subject} saved and synced.`);
   };
 
   const updateSlot = async (updatedSlot: TimetableSlot) => {
     if (!currentUser) return;
     const updatedSlots = slots.map((s) => (s.id === updatedSlot.id ? updatedSlot : s));
     setSlots(updatedSlots);
+
+    if (!currentUser.isDemo) {
+      await syncSlotUpdate(currentUser.id, updatedSlot);
+    }
 
     const nextClassISO = getNextSlotDateISO(updatedSlot.dayOfWeek, updatedSlot.startTime);
     await scheduleClassNotifications(currentUser.id, updatedSlot, nextClassISO, notificationSettings);
@@ -343,6 +356,9 @@ export function useRippleData(currentUser: UserAccount | null) {
   const deleteSlot = async (id: string) => {
     if (!currentUser) return;
     setSlots((prev) => prev.filter((s) => s.id !== id));
+    if (!currentUser.isDemo) {
+      await syncSlotDelete(currentUser.id, id);
+    }
     await cancelItemNotifications(currentUser.id, id);
     showSuccess('Timetable slot removed.');
   };
@@ -366,14 +382,20 @@ export function useRippleData(currentUser: UserAccount | null) {
 
     setTasks((prev) => [newTask, ...prev]);
 
+    if (!currentUser.isDemo) {
+      await syncTaskInsert(currentUser.id, newTask);
+    }
+
     if (newTask.hasDeadline && newTask.dueDate) {
       await scheduleTaskNotifications(currentUser.id, newTask, notificationSettings);
     }
-    showSuccess(`Activity "${newTask.title}" added successfully.`);
+    showSuccess(`Activity "${newTask.title}" saved & synced.`);
   };
 
   const updateTaskProgress = async (taskId: string, percentage: number) => {
     if (!currentUser) return;
+
+    let updatedTaskObj: Task | null = null;
 
     setTasks((prevTasks) =>
       prevTasks.map((t) => {
@@ -383,22 +405,30 @@ export function useRippleData(currentUser: UserAccount | null) {
             ? 'completed'
             : calculateTaskStatus(t.dueDate, t.estimatedHours, percentage, settings.personalVelocityMultiplier, t.hasDeadline ?? true);
 
-          const updatedTask = {
+          const updatedTask: Task = {
             ...t,
             completionPercentage: percentage,
             status: updatedStatus,
             completedAt: isComplete ? new Date().toISOString() : t.completedAt
           };
 
+          updatedTaskObj = updatedTask;
+
           if (isComplete) {
             setCompletedTaskForCelebration(updatedTask);
             cancelItemNotifications(currentUser.id, taskId);
 
-            setDebt((d) => ({
-              ...d,
-              streakDays: d.streakDays + 1,
-              compoundingScore: Math.max(0, d.compoundingScore - 5)
-            }));
+            setDebt((d) => {
+              const newDebt = {
+                ...d,
+                streakDays: d.streakDays + 1,
+                compoundingScore: Math.max(0, d.compoundingScore - 5)
+              };
+              if (!currentUser.isDemo) {
+                syncDebtUpsert(currentUser.id, newDebt);
+              }
+              return newDebt;
+            });
           }
 
           return updatedTask;
@@ -406,6 +436,10 @@ export function useRippleData(currentUser: UserAccount | null) {
         return t;
       })
     );
+
+    if (updatedTaskObj && !currentUser.isDemo) {
+      await syncTaskUpdate(currentUser.id, updatedTaskObj);
+    }
   };
 
   const completeTask = async (taskId: string) => {
@@ -437,22 +471,32 @@ export function useRippleData(currentUser: UserAccount | null) {
       })
     );
 
-    if (updatedTaskObj) {
+    if (updatedTaskObj && !currentUser.isDemo) {
+      await syncTaskUpdate(currentUser.id, updatedTaskObj);
       await scheduleTaskNotifications(currentUser.id, updatedTaskObj, notificationSettings);
     }
 
-    setDebt((d) => ({
-      ...d,
-      totalHoursBehind: d.totalHoursBehind + 0.5,
-      compoundingScore: Math.min(100, d.compoundingScore + 8)
-    }));
+    setDebt((d) => {
+      const newDebt = {
+        ...d,
+        totalHoursBehind: d.totalHoursBehind + 0.5,
+        compoundingScore: Math.min(100, d.compoundingScore + 8)
+      };
+      if (!currentUser.isDemo) {
+        syncDebtUpsert(currentUser.id, newDebt);
+      }
+      return newDebt;
+    });
 
-    showSuccess('Task schedule renegotiated & notifications updated.');
+    showSuccess('Task schedule renegotiated & synced to database.');
   };
 
   const deleteTask = async (id: string) => {
     if (!currentUser) return;
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    if (!currentUser.isDemo) {
+      await syncTaskDelete(currentUser.id, id);
+    }
     await cancelItemNotifications(currentUser.id, id);
     showSuccess('Task removed.');
   };
@@ -465,7 +509,10 @@ export function useRippleData(currentUser: UserAccount | null) {
       dateLogged: new Date().toISOString()
     };
     setEvidenceEntries((prev) => [newEntry, ...prev]);
-    showSuccess('Outcome logged in Evidence Case File!');
+    if (!currentUser.isDemo) {
+      await syncEvidenceInsert(currentUser.id, newEntry);
+    }
+    showSuccess('Outcome logged in Evidence Case File & synced!');
   };
 
   const addStudyLog = async (logData: Omit<StudyLog, 'id' | 'loggedAt'>) => {
@@ -476,23 +523,37 @@ export function useRippleData(currentUser: UserAccount | null) {
       loggedAt: new Date().toISOString()
     };
     setStudyLogs((prev) => [newLog, ...prev]);
+    if (!currentUser.isDemo) {
+      await syncStudyLogInsert(currentUser.id, newLog);
+    }
   };
 
   const deleteStudyLog = async (id: string) => {
     if (!currentUser) return;
     setStudyLogs((prev) => prev.filter((l) => l.id !== id));
+    if (!currentUser.isDemo) {
+      await syncStudyLogDelete(currentUser.id, id);
+    }
     showSuccess('Study entry removed.');
   };
 
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
     if (!currentUser) return;
-    setSettings((prev) => ({ ...prev, ...newSettings }));
-    showSuccess('Settings updated.');
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+    if (!currentUser.isDemo) {
+      await syncUserSettings(currentUser.id, updated);
+    }
+    showSuccess('Settings updated and synced.');
   };
 
   const updateNotificationSettings = async (newSettings: Partial<NotificationSettings>) => {
     if (!currentUser) return;
-    setNotificationSettings((prev) => ({ ...prev, ...newSettings }));
+    const updated = { ...notificationSettings, ...newSettings };
+    setNotificationSettings(updated);
+    if (!currentUser.isDemo) {
+      await syncNotificationSettings(currentUser.id, updated);
+    }
     showSuccess('Notification preferences saved.');
   };
 
@@ -502,7 +563,7 @@ export function useRippleData(currentUser: UserAccount | null) {
     setSlots(bundle.slots);
     setTasks(bundle.tasks);
     setEvidenceEntries(bundle.evidenceEntries);
-    setStudyLogs(initialStudyLogs);
+    setStudyLogs([]);
     setDebt(bundle.debt);
     setSettings(bundle.settings);
     showSuccess(`Loaded template data: ${bundle.name}`);
