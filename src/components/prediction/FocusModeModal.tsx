@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task } from '@/types/ripple';
 import { useRipple } from '@/context/RippleContext';
+import { showError } from '@/utils/toast';
 import { 
   Play, 
   Pause, 
@@ -9,7 +10,7 @@ import {
   RotateCcw,
   BookOpen,
   Minimize2,
-  X
+  AlertCircle
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -35,12 +36,11 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
     resumeGlobalTimer,
     resetGlobalTimer,
     setTimerMinimized,
-    stopAndLogTimer,
-    cancelGlobalTimer
+    stopAndLogTimer
   } = useRipple();
 
-  const [selectedPreset, setSelectedPreset] = useState<number>(25);
-  const [customMinutes, setCustomMinutes] = useState<number>(25);
+  const [selectedPreset, setSelectedPreset] = useState<number | null>(25);
+  const [customMinutesInput, setCustomMinutesInput] = useState<string>('25');
   const [subject, setSubject] = useState<string>('General Study');
   const [localProgress, setLocalProgress] = useState<number>(0);
 
@@ -65,10 +65,14 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
         setSubject('General Study');
       }
 
-      // If no global timer is active for this task, prime it
-      if (!activeTimer || activeTimer.taskId !== task.id) {
+      // If active timer exists for this task, sync the input
+      if (activeTimer && activeTimer.taskId === task.id) {
+        const initialMins = activeTimer.initialDurationMinutes || Math.round(activeTimer.totalSeconds / 60);
+        setCustomMinutesInput(String(initialMins));
+        setSelectedPreset(TIMER_PRESETS.includes(initialMins) ? initialMins : null);
+      } else if (!activeTimer) {
         setSelectedPreset(25);
-        setCustomMinutes(25);
+        setCustomMinutesInput('25');
       }
     }
   }, [task, slots, activeTimer]);
@@ -76,46 +80,74 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
   if (!task) return null;
 
   // Derive current timer display values
-  const isTimerForThisTask = activeTimer && activeTimer.taskId === task.id;
-  const isRunning = isTimerForThisTask ? activeTimer.isRunning : false;
-  const secondsLeft = isTimerForThisTask ? activeTimer.secondsLeft : selectedPreset * 60;
-  const totalSeconds = isTimerForThisTask ? activeTimer.totalSeconds : selectedPreset * 60;
+  const isTimerForThisTask = Boolean(activeTimer && activeTimer.taskId === task.id);
+  const isRunning = isTimerForThisTask ? (activeTimer?.isRunning ?? false) : false;
+  
+  // Parsed numeric duration for starting or resting
+  const parsedDuration = parseInt(customMinutesInput, 10);
+  const isValidDuration = !isNaN(parsedDuration) && parsedDuration > 0;
+
+  const secondsLeft = isTimerForThisTask 
+    ? (activeTimer?.secondsLeft ?? 0) 
+    : (isValidDuration ? parsedDuration * 60 : 0);
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-  const handleSelectDuration = (mins: number) => {
+  const handleSelectPreset = (mins: number) => {
     if (isRunning) return;
     setSelectedPreset(mins);
-    setCustomMinutes(mins);
+    setCustomMinutesInput(String(mins));
     if (isTimerForThisTask) {
       resetGlobalTimer(mins);
     }
   };
 
-  const handleCustomMinutesChange = (val: number) => {
+  // Allow any string/digit entry including 0, empty string, multi-digit numbers (e.g. 120, 360) without lockup
+  const handleCustomInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isRunning) return;
-    const mins = Math.max(1, Math.min(180, val));
-    setSelectedPreset(mins);
-    setCustomMinutes(mins);
-    if (isTimerForThisTask) {
-      resetGlobalTimer(mins);
+    const rawVal = e.target.value;
+
+    // Filter to only digits
+    const cleaned = rawVal.replace(/[^0-9]/g, '');
+    
+    // Allow empty string so user can backspace freely
+    setCustomMinutesInput(cleaned);
+
+    const numeric = parseInt(cleaned, 10);
+    if (!isNaN(numeric)) {
+      if (TIMER_PRESETS.includes(numeric)) {
+        setSelectedPreset(numeric);
+      } else {
+        setSelectedPreset(null);
+      }
+
+      if (isTimerForThisTask && numeric > 0) {
+        resetGlobalTimer(numeric);
+      }
+    } else {
+      setSelectedPreset(null);
     }
   };
 
   const toggleStartPause = () => {
     if (!isTimerForThisTask) {
-      // Start fresh global timer
+      if (!isValidDuration) {
+        showError('Please enter a sprint duration greater than 0 minutes.');
+        return;
+      }
+
+      // Start fresh global background timer
       startGlobalTimer({
         taskId: task.id,
         taskTitle: task.title,
         subject: subject || 'General Study',
-        durationMinutes: selectedPreset,
+        durationMinutes: parsedDuration,
         isMinimized: false
       });
     } else {
-      if (activeTimer.isRunning) {
+      if (activeTimer?.isRunning) {
         pauseGlobalTimer();
       } else {
         resumeGlobalTimer();
@@ -124,19 +156,25 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
   };
 
   const handleReset = () => {
+    const targetMins = isValidDuration ? parsedDuration : 25;
     if (isTimerForThisTask) {
-      resetGlobalTimer(selectedPreset);
+      resetGlobalTimer(targetMins);
+    } else {
+      setCustomMinutesInput(String(targetMins));
     }
   };
 
   const handleMinimize = () => {
-    // If not started yet, auto-start and minimize so user doesn't lose context
     if (!isTimerForThisTask) {
+      if (!isValidDuration) {
+        showError('Please enter a sprint duration greater than 0 minutes before minimizing.');
+        return;
+      }
       startGlobalTimer({
         taskId: task.id,
         taskTitle: task.title,
         subject: subject || 'General Study',
-        durationMinutes: selectedPreset,
+        durationMinutes: parsedDuration,
         isMinimized: true
       });
     } else {
@@ -160,7 +198,6 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
   };
 
   const handleCloseDialog = () => {
-    // If running, minimize instead of discarding
     if (isRunning) {
       setTimerMinimized(true);
     }
@@ -219,13 +256,14 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-slate-300">Sprint Duration Presets</label>
+            <label className="text-[11px] font-semibold text-slate-300">Sprint Duration (Minutes)</label>
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
               {TIMER_PRESETS.map((mins) => (
                 <button
                   key={mins}
+                  type="button"
                   disabled={isRunning}
-                  onClick={() => handleSelectDuration(mins)}
+                  onClick={() => handleSelectPreset(mins)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                     selectedPreset === mins
                       ? 'bg-emerald-600 text-white shadow-md'
@@ -236,19 +274,28 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
                 </button>
               ))}
 
-              <div className="flex items-center gap-1 pl-1">
+              <div className="flex items-center gap-1 pl-1 shrink-0">
                 <span className="text-slate-500 text-[10px]">Custom:</span>
                 <Input
-                  type="number"
-                  min={1}
-                  max={180}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Mins"
                   disabled={isRunning}
-                  value={customMinutes}
-                  onChange={(e) => handleCustomMinutesChange(Number(e.target.value))}
-                  className="w-14 h-7 text-xs bg-slate-950 border-slate-800 text-white text-center font-mono p-1"
+                  value={customMinutesInput}
+                  onChange={handleCustomInputChange}
+                  className="w-16 h-7 text-xs bg-slate-950 border-slate-800 text-white text-center font-mono p-1 focus-visible:ring-emerald-500"
                 />
               </div>
             </div>
+
+            {/* Validation warning if duration is 0 or empty */}
+            {!isValidDuration && customMinutesInput !== '' && (
+              <div className="flex items-center gap-1 text-[10px] text-amber-400 pt-0.5">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>Sprint duration must be at least 1 minute to start.</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -258,19 +305,20 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({ task, onClose })
             {formattedTime}
           </div>
           <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2 font-mono">
-            {isRunning ? `Focusing on ${subject}` : 'Sprint Ready'}
+            {isRunning ? `Focusing on ${subject}` : isValidDuration ? `Sprint Ready (${parsedDuration}m)` : 'Enter Duration'}
           </p>
 
           <div className="flex items-center justify-center gap-3 mt-4">
             <Button
               size="sm"
+              disabled={!isRunning && !isValidDuration}
               onClick={toggleStartPause}
               className={`${
                 isRunning ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
-              } text-white font-semibold text-xs gap-1.5 px-6 h-9 rounded-xl shadow-lg shadow-emerald-950/60`}
+              } text-white font-semibold text-xs gap-1.5 px-6 h-9 rounded-xl shadow-lg shadow-emerald-950/60 transition-all`}
             >
               {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
-              {isRunning ? 'Pause Sprint' : `Start ${selectedPreset}m Timer`}
+              {isRunning ? 'Pause Sprint' : `Start ${isValidDuration ? `${parsedDuration}m` : ''} Timer`}
             </Button>
 
             <Button

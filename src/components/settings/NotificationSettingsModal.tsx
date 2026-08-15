@@ -21,10 +21,18 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
 }) => {
   const { notificationSettings, updateNotificationSettings } = useRipple();
   const [permissionState, setPermissionState] = useState<NotificationPermission>(getNotificationPermissionState());
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   const handleRequestPermission = async () => {
     const granted = await requestNotificationPermission();
     setPermissionState(getNotificationPermissionState());
+  };
+
+  const handleSendTestClick = async () => {
+    setIsSendingTest(true);
+    await sendTestNotification();
+    setPermissionState(getNotificationPermissionState());
+    setIsSendingTest(false);
   };
 
   const handleToggleTaskReminderOption = (option: ReminderTiming) => {
@@ -193,11 +201,12 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
           <Button
             variant="outline"
             size="sm"
-            onClick={sendTestNotification}
-            className="border-slate-800 bg-slate-900 text-amber-300 hover:text-amber-200 text-xs gap-1.5"
+            disabled={isSendingTest}
+            onClick={handleSendTestClick}
+            className="border-slate-800 bg-slate-900 text-amber-300 hover:text-amber-200 text-xs gap-1.5 transition-all"
           >
-            <Send className="w-3.5 h-3.5 text-amber-400" />
-            Send Test Background Notification
+            <Send className={`w-3.5 h-3.5 text-amber-400 ${isSendingTest ? 'animate-spin' : ''}`} />
+            <span>Send Test Background Notification</span>
           </Button>
 
           <Button

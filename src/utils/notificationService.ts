@@ -58,8 +58,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 
   try {
-    const permission = await Notification.permission;
-    if (permission === 'granted') {
+    if (Notification.permission === 'granted') {
       return true;
     }
 
@@ -69,7 +68,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
       await registerServiceWorker();
       return true;
     } else {
-      showError('Notification permission was denied.');
+      showError('Notification permission was denied. Please allow notifications in browser site settings.');
       return false;
     }
   } catch (e) {
@@ -107,7 +106,7 @@ export async function scheduleTaskNotifications(
   task: Task,
   settings: NotificationSettings
 ): Promise<void> {
-  if (!settings.taskRemindersEnabled) return;
+  if (!settings.taskRemindersEnabled || !task.dueDate) return;
 
   const reminders = task.reminders && task.reminders.length > 0
     ? task.reminders
@@ -117,7 +116,6 @@ export async function scheduleTaskNotifications(
   await cancelItemNotifications(userId, task.id);
 
   const nowMs = Date.now();
-  const dueMs = new Date(task.dueDate).getTime();
 
   for (const reminderOpt of reminders) {
     const triggerISO = calculateTriggerTime(task.dueDate, reminderOpt);
@@ -215,22 +213,66 @@ export async function cancelItemNotifications(userId: string, itemId: string): P
   }
 }
 
-// Test Notification Trigger
-export async function sendTestNotification(): Promise<void> {
-  const permitted = await requestNotificationPermission();
-  if (!permitted) return;
+// Test Notification Trigger - Works every time it is clicked with unique identifiers and renotify enabled
+export async function sendTestNotification(): Promise<boolean> {
+  let isPermitted = Notification.permission === 'granted';
 
-  if (swRegistration && swRegistration.showNotification) {
-    await swRegistration.showNotification('🚀 RIPPLE Background Notification Test', {
-      body: 'Success! Background Web Notifications are active even when RIPPLE is closed.',
-      icon: '/placeholder.svg',
-      tag: 'ripple-test'
-    });
-  } else {
-    new Notification('🚀 RIPPLE Background Notification Test', {
-      body: 'Success! Web Notifications are active.',
-      icon: '/placeholder.svg'
-    });
+  if (!isPermitted) {
+    isPermitted = await requestNotificationPermission();
+    if (!isPermitted) {
+      showError('Please enable notification permission to send alerts.');
+      return false;
+    }
+  }
+
+  const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const uniqueTag = `ripple-test-${Date.now()}`;
+  const notificationTitle = '🚀 RIPPLE Background Notification Test';
+  const notificationBody = `[${timestamp}] Test notification fired successfully! Background alerts are active and running in sync with your timezone.`;
+
+  try {
+    // If Service Worker is ready, use it for rich push capability
+    let sw = swRegistration;
+    if (!sw && 'serviceWorker' in navigator) {
+      try {
+        sw = await navigator.serviceWorker.getRegistration();
+      } catch {}
+    }
+
+    if (sw && typeof sw.showNotification === 'function') {
+      await sw.showNotification(notificationTitle, {
+        body: notificationBody,
+        icon: '/placeholder.svg',
+        badge: '/placeholder.svg',
+        tag: uniqueTag,
+        renotify: true,
+        requireInteraction: false,
+        data: { url: window.location.origin }
+      });
+    } else {
+      new Notification(notificationTitle, {
+        body: notificationBody,
+        icon: '/placeholder.svg',
+        tag: uniqueTag
+      });
+    }
+
+    showSuccess(`Notification dispatched at ${timestamp}!`);
+    return true;
+  } catch (err) {
+    console.warn('Direct notification failed, fallbacking to standard notification:', err);
+    try {
+      new Notification(notificationTitle, {
+        body: notificationBody,
+        icon: '/placeholder.svg',
+        tag: uniqueTag
+      });
+      showSuccess(`Notification dispatched at ${timestamp}!`);
+      return true;
+    } catch (fallbackErr) {
+      showError('Failed to display system notification. Ensure notifications are not blocked in your OS.');
+      return false;
+    }
   }
 }
 
