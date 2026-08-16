@@ -2,6 +2,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { GoogleAnalyticsTracker } from "@/components/analytics/GoogleAnalyticsTracker";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -12,6 +13,7 @@ const App = () => (
     <TooltipProvider>
       <Sonner />
       <BrowserRouter>
+        <GoogleAnalyticsTracker />
         <Routes>
           <Route path="/" element={<Index />} />
           {/* Catch-all 404 Route */}
