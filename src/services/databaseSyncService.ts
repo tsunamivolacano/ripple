@@ -51,6 +51,20 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
   const localSettings = safeGetStorage<UserSettings>(`ripple_settings_${userId}`, defaultSettings);
   const localNotifSettings = safeGetStorage<NotificationSettings>(`ripple_notif_settings_${userId}`, defaultNotifSettings);
 
+  if (!isValidUUID(userId)) {
+    const targetHours = localSettings.dailyStudyTargetHours || 3.0;
+    const debt = calculateUnifiedDebt(localStudy, localTasks, targetHours, 1);
+    return {
+      slots: localSlots,
+      tasks: localTasks,
+      evidenceEntries: localEvidence,
+      studyLogs: localStudy,
+      debt,
+      settings: localSettings,
+      notificationSettings: localNotifSettings
+    };
+  }
+
   try {
     // 1. Fetch Study Logs from Supabase
     let studyLogs: StudyLog[] = [];
@@ -71,6 +85,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       }));
       safeSetStorage(`ripple_study_${userId}`, studyLogs);
     } else {
+      if (studyErr) console.warn('[databaseSyncService] Failed to fetch study_logs:', studyErr.message);
       studyLogs = localStudy;
     }
 
@@ -104,6 +119,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       }));
       safeSetStorage(`ripple_tasks_${userId}`, tasks);
     } else {
+      if (tasksErr) console.warn('[databaseSyncService] Failed to fetch tasks:', tasksErr.message);
       tasks = localTasks;
     }
 
@@ -133,6 +149,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       }));
       safeSetStorage(`ripple_slots_${userId}`, slots);
     } else {
+      if (slotsErr) console.warn('[databaseSyncService] Failed to fetch timetable_slots:', slotsErr.message);
       slots = localSlots;
     }
 
@@ -160,6 +177,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       }));
       safeSetStorage(`ripple_evidence_${userId}`, evidenceEntries);
     } else {
+      if (evErr) console.warn('[databaseSyncService] Failed to fetch evidence_entries:', evErr.message);
       evidenceEntries = localEvidence;
     }
 
@@ -235,6 +253,8 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
  * Study Log Database Operations (Guaranteed Supabase UUID Insert)
  */
 export async function syncStudyLogInsert(userId: string, log: StudyLog): Promise<string | null> {
+  if (!isValidUUID(userId)) return null;
+
   try {
     const validId = isValidUUID(log.id) ? log.id : generateUUID();
 
@@ -242,7 +262,7 @@ export async function syncStudyLogInsert(userId: string, log: StudyLog): Promise
       id: validId,
       user_id: userId,
       subject: log.subject,
-      duration_minutes: log.durationMinutes,
+      duration_minutes: Math.max(1, Math.round(log.durationMinutes)),
       topic: log.topic || null,
       logged_at: log.loggedAt || new Date().toISOString(),
       source: log.source || 'manual'
@@ -250,7 +270,7 @@ export async function syncStudyLogInsert(userId: string, log: StudyLog): Promise
 
     const { data, error } = await supabase.from('study_logs').insert(payload).select('id').single();
     if (error) {
-      console.error('[databaseSyncService] Error inserting study log into Supabase:', error);
+      console.error('[databaseSyncService] Error inserting study log into Supabase:', error.message, error.details);
       return null;
     }
     return data?.id || validId;
@@ -261,9 +281,12 @@ export async function syncStudyLogInsert(userId: string, log: StudyLog): Promise
 }
 
 export async function syncStudyLogDelete(userId: string, logId: string): Promise<void> {
+  if (!isValidUUID(userId) || !isValidUUID(logId)) return;
+
   try {
-    if (isValidUUID(logId)) {
-      await supabase.from('study_logs').delete().eq('id', logId).eq('user_id', userId);
+    const { error } = await supabase.from('study_logs').delete().eq('id', logId).eq('user_id', userId);
+    if (error) {
+      console.error('[databaseSyncService] Error deleting study log:', error.message);
     }
   } catch (e) {
     console.error('[databaseSyncService] Study log delete exception:', e);
@@ -274,6 +297,8 @@ export async function syncStudyLogDelete(userId: string, logId: string): Promise
  * Task Database Operations
  */
 export async function syncTaskInsert(userId: string, task: Task): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
     const validId = isValidUUID(task.id) ? task.id : generateUUID();
 
@@ -297,13 +322,18 @@ export async function syncTaskInsert(userId: string, task: Task): Promise<void> 
       created_at: task.createdAt || new Date().toISOString()
     };
 
-    await supabase.from('tasks').upsert(payload);
+    const { error } = await supabase.from('tasks').upsert(payload);
+    if (error) {
+      console.error('[databaseSyncService] Error upserting task:', error.message);
+    }
   } catch (e) {
     console.warn('[databaseSyncService] Task insert notice:', e);
   }
 }
 
 export async function syncTaskUpdate(userId: string, task: Task): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
     const payload = {
       title: task.title,
@@ -324,15 +354,23 @@ export async function syncTaskUpdate(userId: string, task: Task): Promise<void> 
       last_renegotiated: task.lastRenegotiatedAt || null
     };
 
-    await supabase.from('tasks').update(payload).eq('id', task.id).eq('user_id', userId);
+    const { error } = await supabase.from('tasks').update(payload).eq('id', task.id).eq('user_id', userId);
+    if (error) {
+      console.error('[databaseSyncService] Error updating task:', error.message);
+    }
   } catch (e) {
     console.warn('[databaseSyncService] Task update notice:', e);
   }
 }
 
 export async function syncTaskDelete(userId: string, taskId: string): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
-    await supabase.from('tasks').delete().eq('id', taskId).eq('user_id', userId);
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId).eq('user_id', userId);
+    if (error) {
+      console.error('[databaseSyncService] Error deleting task:', error.message);
+    }
   } catch (e) {
     console.warn('[databaseSyncService] Task delete notice:', e);
   }
@@ -342,6 +380,8 @@ export async function syncTaskDelete(userId: string, taskId: string): Promise<vo
  * Timetable Slot Database Operations
  */
 export async function syncSlotInsert(userId: string, slot: TimetableSlot): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
     const payload = {
       id: slot.id,
@@ -361,13 +401,18 @@ export async function syncSlotInsert(userId: string, slot: TimetableSlot): Promi
       notes: slot.notes || null
     };
 
-    await supabase.from('timetable_slots').upsert(payload);
+    const { error } = await supabase.from('timetable_slots').upsert(payload);
+    if (error) {
+      console.error('[databaseSyncService] Error upserting slot:', error.message);
+    }
   } catch (e) {
     console.warn('[databaseSyncService] Slot insert notice:', e);
   }
 }
 
 export async function syncSlotUpdate(userId: string, slot: TimetableSlot): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
     const payload = {
       subject: slot.subject,
@@ -385,15 +430,23 @@ export async function syncSlotUpdate(userId: string, slot: TimetableSlot): Promi
       notes: slot.notes || null
     };
 
-    await supabase.from('timetable_slots').update(payload).eq('id', slot.id).eq('user_id', userId);
+    const { error } = await supabase.from('timetable_slots').update(payload).eq('id', slot.id).eq('user_id', userId);
+    if (error) {
+      console.error('[databaseSyncService] Error updating slot:', error.message);
+    }
   } catch (e) {
     console.warn('[databaseSyncService] Slot update notice:', e);
   }
 }
 
 export async function syncSlotDelete(userId: string, slotId: string): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
-    await supabase.from('timetable_slots').delete().eq('id', slotId).eq('user_id', userId);
+    const { error } = await supabase.from('timetable_slots').delete().eq('id', slotId).eq('user_id', userId);
+    if (error) {
+      console.error('[databaseSyncService] Error deleting slot:', error.message);
+    }
   } catch (e) {
     console.warn('[databaseSyncService] Slot delete notice:', e);
   }
@@ -403,6 +456,8 @@ export async function syncSlotDelete(userId: string, slotId: string): Promise<vo
  * Evidence Case File Database Operations (Guaranteed Supabase UUID Insert)
  */
 export async function syncEvidenceInsert(userId: string, entry: EvidenceEntry): Promise<string | null> {
+  if (!isValidUUID(userId)) return null;
+
   try {
     const validId = isValidUUID(entry.id) ? entry.id : generateUUID();
 
@@ -423,7 +478,7 @@ export async function syncEvidenceInsert(userId: string, entry: EvidenceEntry): 
 
     const { data, error } = await supabase.from('evidence_entries').insert(payload).select('id').single();
     if (error) {
-      console.error('[databaseSyncService] Error inserting evidence entry:', error);
+      console.error('[databaseSyncService] Error inserting evidence entry:', error.message);
       return null;
     }
     return data?.id || validId;
@@ -437,6 +492,8 @@ export async function syncEvidenceInsert(userId: string, entry: EvidenceEntry): 
  * Debt & User Settings Operations
  */
 export async function syncDebtUpsert(userId: string, debt: ProcrastinationDebt): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
     const payload = {
       user_id: userId,
@@ -464,6 +521,8 @@ export async function syncDebtUpsert(userId: string, debt: ProcrastinationDebt):
 }
 
 export async function syncUserSettings(userId: string, settings: UserSettings): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
     const payload = {
       user_id: userId,
@@ -480,6 +539,8 @@ export async function syncUserSettings(userId: string, settings: UserSettings): 
 }
 
 export async function syncNotificationSettings(userId: string, settings: NotificationSettings): Promise<void> {
+  if (!isValidUUID(userId)) return;
+
   try {
     const payload = {
       user_id: userId,

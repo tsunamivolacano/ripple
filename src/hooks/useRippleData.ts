@@ -1,42 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { 
-  TimetableSlot, 
   Task, 
-  EvidenceEntry, 
-  StudyLog, 
-  ProcrastinationDebt, 
-  UserSettings, 
-  NotificationSettings,
-  ActiveTimerState 
+  ProcrastinationDebt
 } from '@/types/ripple';
-import { calculateTaskStatus } from '@/utils/timeUtils';
-import { safeGetStorage, safeSetStorage } from '@/utils/storageUtils';
-import { generateUUID } from '@/utils/uuidUtils';
+import { safeSetStorage } from '@/utils/storageUtils';
 import { calculateUnifiedDebt } from '@/utils/studyDebtUtils';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
-import { showSuccess, showError } from '@/utils/toast';
-import { 
-  scheduleTaskNotifications, 
-  scheduleClassNotifications, 
-  cancelItemNotifications, 
-  getNextSlotDateISO 
-} from '@/utils/notificationService';
-import { 
-  loadUserCloudData,
-  syncTaskInsert,
-  syncTaskUpdate,
-  syncTaskDelete,
-  syncSlotInsert,
-  syncSlotUpdate,
-  syncSlotDelete,
-  syncStudyLogInsert,
-  syncStudyLogDelete,
-  syncEvidenceInsert,
-  syncDebtUpsert,
-  syncUserSettings,
-  syncNotificationSettings
-} from '@/services/databaseSyncService';
+import { showSuccess } from '@/utils/toast';
+import { loadUserCloudData, syncDebtUpsert } from '@/services/databaseSyncService';
 import { UserAccount } from './useRippleAuth';
+
+import { useRippleTimer } from './useRippleTimer';
+import { useRippleStudyLogs } from './useRippleStudyLogs';
+import { useRippleTasks } from './useRippleTasks';
+import { useRippleSlots } from './useRippleSlots';
+import { useRippleEvidence } from './useRippleEvidence';
+import { useRippleSettings } from './useRippleSettings';
 
 const defaultPersona = PERSONAS_MAP['riya'];
 
@@ -59,48 +38,28 @@ const emptyDebt: ProcrastinationDebt = {
   studyDeficitHours: 0
 };
 
-const emptySettings: UserSettings = {
-  intensityMode: 'standard',
-  isMinorProfile: false,
-  weeklyDigestOnly: false,
-  personalVelocityMultiplier: 1.0,
-  dailyStudyTargetHours: 3.0
-};
-
-const defaultNotificationSettings: NotificationSettings = {
-  taskRemindersEnabled: true,
-  classRemindersEnabled: true,
-  defaultTaskReminders: ['15m', 'exact'],
-  defaultClassReminders: ['15m']
-};
-
 export function useRippleData(currentUser: UserAccount | null) {
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [currentPersonaId, setCurrentPersonaId] = useState<string>('riya');
-  
-  const [slots, setSlots] = useState<TimetableSlot[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [evidenceEntries, setEvidenceEntries] = useState<EvidenceEntry[]>([]);
-  const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
   const [debt, setDebt] = useState<ProcrastinationDebt>(emptyDebt);
-  const [settings, setSettings] = useState<UserSettings>(emptySettings);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(defaultNotificationSettings);
-
-  const [activeTaskForPrediction, setActiveTaskForPrediction] = useState<Task | null>(null);
-  const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
   const [completedTaskForCelebration, setCompletedTaskForCelebration] = useState<Task | null>(null);
-  const [isNotificationModalOpen, setNotificationModalOpen] = useState<boolean>(false);
 
-  // Global Active Background Timer
-  const [activeTimer, setActiveTimer] = useState<ActiveTimerState | null>(() => {
-    return safeGetStorage<ActiveTimerState | null>('ripple_active_timer', null);
-  });
+  // Sub-modules
+  const settingsModule = useRippleSettings(currentUser);
+  const studyLogsModule = useRippleStudyLogs(currentUser);
+  const slotsModule = useRippleSlots(currentUser, settingsModule.notificationSettings);
 
-  const activeTimerRef = useRef<ActiveTimerState | null>(activeTimer);
-  useEffect(() => {
-    activeTimerRef.current = activeTimer;
-    safeSetStorage('ripple_active_timer', activeTimer);
-  }, [activeTimer]);
+  const tasksModule = useRippleTasks(
+    currentUser,
+    settingsModule.settings,
+    settingsModule.notificationSettings,
+    (task) => setCompletedTaskForCelebration(task),
+    (updater) => setDebt((prev) => updater(prev))
+  );
+
+  const evidenceModule = useRippleEvidence(currentUser);
+
+  const timerModule = useRippleTimer(studyLogsModule.addStudyLog);
 
   // Load account data when currentUser changes (Cloud-first)
   useEffect(() => {
@@ -108,12 +67,11 @@ export function useRippleData(currentUser: UserAccount | null) {
 
     async function initializeUserData() {
       if (!currentUser) {
-        setSlots([]);
-        setTasks([]);
-        setEvidenceEntries([]);
-        setStudyLogs([]);
+        slotsModule.setSlots([]);
+        tasksModule.setTasks([]);
+        evidenceModule.setEvidenceEntries([]);
+        studyLogsModule.setStudyLogs([]);
         setDebt(emptyDebt);
-        setSettings(emptySettings);
         setIsLoadingData(false);
         return;
       }
@@ -123,13 +81,12 @@ export function useRippleData(currentUser: UserAccount | null) {
       // Demo Persona account
       if (currentUser.isDemo && currentUser.demoPersonaId) {
         const persona = PERSONAS_MAP[currentUser.demoPersonaId] || defaultPersona;
-        setSlots(persona.slots);
-        setTasks(persona.tasks);
-        setEvidenceEntries(persona.evidenceEntries);
-        setStudyLogs([]);
+        slotsModule.setSlots(persona.slots);
+        tasksModule.setTasks(persona.tasks);
+        evidenceModule.setEvidenceEntries(persona.evidenceEntries);
+        studyLogsModule.setStudyLogs([]);
         setDebt(persona.debt);
-        setSettings(persona.settings);
-        setNotificationSettings(defaultNotificationSettings);
+        settingsModule.setSettings(persona.settings);
         setCurrentPersonaId(persona.id);
         setIsLoadingData(false);
         return;
@@ -139,13 +96,13 @@ export function useRippleData(currentUser: UserAccount | null) {
       try {
         const cloudData = await loadUserCloudData(currentUser.id);
         if (!isCancelled) {
-          setSlots(cloudData.slots);
-          setTasks(cloudData.tasks);
-          setEvidenceEntries(cloudData.evidenceEntries);
-          setStudyLogs(cloudData.studyLogs);
+          slotsModule.setSlots(cloudData.slots);
+          tasksModule.setTasks(cloudData.tasks);
+          evidenceModule.setEvidenceEntries(cloudData.evidenceEntries);
+          studyLogsModule.setStudyLogs(cloudData.studyLogs);
           setDebt(cloudData.debt);
-          setSettings(cloudData.settings);
-          setNotificationSettings(cloudData.notificationSettings);
+          settingsModule.setSettings(cloudData.settings);
+          settingsModule.setNotificationSettings(cloudData.notificationSettings);
         }
       } catch (e) {
         console.error('[useRippleData] Error loading cloud data:', e);
@@ -166,488 +123,112 @@ export function useRippleData(currentUser: UserAccount | null) {
   // Recompute unified study debt & daily shortfall whenever study logs or tasks change
   useEffect(() => {
     if (!isLoadingData && currentUser) {
-      const targetHours = settings.dailyStudyTargetHours || 3.0;
-      const recomputedDebt = calculateUnifiedDebt(studyLogs, tasks, targetHours, debt.streakDays);
+      const targetHours = settingsModule.settings.dailyStudyTargetHours || 3.0;
+      const recomputedDebt = calculateUnifiedDebt(
+        studyLogsModule.studyLogs,
+        tasksModule.tasks,
+        targetHours,
+        debt.streakDays
+      );
       setDebt(recomputedDebt);
 
       if (!currentUser.isDemo) {
         syncDebtUpsert(currentUser.id, recomputedDebt);
       }
     }
-  }, [studyLogs.length, tasks, settings.dailyStudyTargetHours]);
+  }, [studyLogsModule.studyLogs.length, tasksModule.tasks, settingsModule.settings.dailyStudyTargetHours]);
 
   // Local storage persistence backup for offline resilience
   useEffect(() => {
     if (currentUser && !currentUser.isDemo && !isLoadingData) {
       const uKey = currentUser.id;
-      safeSetStorage(`ripple_slots_${uKey}`, slots);
-      safeSetStorage(`ripple_tasks_${uKey}`, tasks);
-      safeSetStorage(`ripple_evidence_${uKey}`, evidenceEntries);
-      safeSetStorage(`ripple_study_${uKey}`, studyLogs);
+      safeSetStorage(`ripple_slots_${uKey}`, slotsModule.slots);
+      safeSetStorage(`ripple_tasks_${uKey}`, tasksModule.tasks);
+      safeSetStorage(`ripple_evidence_${uKey}`, evidenceModule.evidenceEntries);
+      safeSetStorage(`ripple_study_${uKey}`, studyLogsModule.studyLogs);
       safeSetStorage(`ripple_debt_${uKey}`, debt);
-      safeSetStorage(`ripple_settings_${uKey}`, settings);
-      safeSetStorage(`ripple_notif_settings_${uKey}`, notificationSettings);
+      safeSetStorage(`ripple_settings_${uKey}`, settingsModule.settings);
+      safeSetStorage(`ripple_notif_settings_${uKey}`, settingsModule.notificationSettings);
     }
-  }, [currentUser, slots, tasks, evidenceEntries, studyLogs, debt, settings, notificationSettings, isLoadingData]);
-
-  // Global Timestamp Ticker for Background Timer
-  useEffect(() => {
-    const timerInterval = setInterval(() => {
-      const current = activeTimerRef.current;
-      if (!current || !current.isRunning || !current.targetEndTime) return;
-
-      const now = Date.now();
-      const remainingMs = current.targetEndTime - now;
-      const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
-
-      if (secondsLeft <= 0) {
-        const loggedMins = current.initialDurationMinutes || Math.round(current.totalSeconds / 60);
-        addStudyLog({
-          subject: current.subject || 'General Study',
-          durationMinutes: Math.max(1, loggedMins),
-          topic: `Completed Sprint: ${current.taskTitle}`,
-          source: 'timer'
-        });
-
-        if ('Notification' in window && Notification.permission === 'granted') {
-          try {
-            new Notification(`🎉 Focus Sprint Completed!`, {
-              body: `Great job! You finished your ${loggedMins}-minute focus block for "${current.taskTitle}".`,
-              icon: '/placeholder.svg'
-            });
-          } catch {}
-        }
-
-        showSuccess(`🎯 Sprint Complete! Saved +${loggedMins}m to Supabase Study Log.`);
-        setActiveTimer(null);
-      } else {
-        setActiveTimer((prev) => (prev ? { ...prev, secondsLeft } : null));
-      }
-    }, 500);
-
-    return () => clearInterval(timerInterval);
-  }, [currentUser]);
-
-  // Status auto-refresh ticker every 30s
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTasks((prevTasks) =>
-        prevTasks.map((t) => {
-          if (t.status === 'completed' || t.status === 'renegotiated') return t;
-          const newStatus = calculateTaskStatus(
-            t.dueDate,
-            t.estimatedHours,
-            t.completionPercentage,
-            settings.personalVelocityMultiplier,
-            t.hasDeadline ?? true
-          );
-          return { ...t, status: newStatus };
-        })
-      );
-    }, 30000);
-    return () => clearInterval(timer);
-  }, [settings.personalVelocityMultiplier]);
-
-  // Timer Control Functions
-  const startGlobalTimer = (params: {
-    taskId?: string;
-    taskTitle: string;
-    subject: string;
-    durationMinutes: number;
-    isMinimized?: boolean;
-  }) => {
-    const totalSecs = params.durationMinutes * 60;
-    const now = Date.now();
-    const targetEnd = now + totalSecs * 1000;
-
-    const timerObj: ActiveTimerState = {
-      id: generateUUID(),
-      taskId: params.taskId,
-      taskTitle: params.taskTitle,
-      subject: params.subject,
-      totalSeconds: totalSecs,
-      secondsLeft: totalSecs,
-      isRunning: true,
-      targetEndTime: targetEnd,
-      startedAt: now,
-      initialDurationMinutes: params.durationMinutes,
-      isMinimized: params.isMinimized ?? false
-    };
-
-    setActiveTimer(timerObj);
-  };
-
-  const pauseGlobalTimer = () => {
-    setActiveTimer((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        isRunning: false,
-        targetEndTime: null
-      };
-    });
-  };
-
-  const resumeGlobalTimer = () => {
-    setActiveTimer((prev) => {
-      if (!prev) return null;
-      const now = Date.now();
-      return {
-        ...prev,
-        isRunning: true,
-        targetEndTime: now + prev.secondsLeft * 1000
-      };
-    });
-  };
-
-  const resetGlobalTimer = (newDurationMinutes?: number) => {
-    setActiveTimer((prev) => {
-      if (!prev) return null;
-      const mins = newDurationMinutes || prev.initialDurationMinutes;
-      const secs = mins * 60;
-      return {
-        ...prev,
-        totalSeconds: secs,
-        secondsLeft: secs,
-        initialDurationMinutes: mins,
-        isRunning: false,
-        targetEndTime: null
-      };
-    });
-  };
-
-  const setTimerMinimized = (minimized: boolean) => {
-    setActiveTimer((prev) => (prev ? { ...prev, isMinimized: minimized } : null));
-  };
-
-  const stopAndLogTimer = async () => {
-    const current = activeTimer;
-    if (!current) return;
-
-    const elapsedSeconds = current.totalSeconds - current.secondsLeft;
-    const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
-
-    await addStudyLog({
-      subject: current.subject || 'General Study',
-      durationMinutes: elapsedMinutes,
-      topic: `Focus Session: ${current.taskTitle}`,
-      source: 'timer'
-    });
-
-    setActiveTimer(null);
-    showSuccess(`Saved +${elapsedMinutes}m study session to Supabase.`);
-  };
-
-  const cancelGlobalTimer = () => {
-    setActiveTimer(null);
-  };
-
-  const addSlot = async (slotData: Omit<TimetableSlot, 'id'>) => {
-    if (!currentUser) return;
-    const newSlot: TimetableSlot = { ...slotData, id: generateUUID() };
-    const updatedSlots = [...slots, newSlot];
-    setSlots(updatedSlots);
-
-    if (!currentUser.isDemo) {
-      await syncSlotInsert(currentUser.id, newSlot);
-    }
-
-    const nextClassISO = getNextSlotDateISO(newSlot.dayOfWeek, newSlot.startTime);
-    await scheduleClassNotifications(currentUser.id, newSlot, nextClassISO, notificationSettings);
-    showSuccess(`Timetable slot for ${newSlot.subject} saved.`);
-  };
-
-  const updateSlot = async (updatedSlot: TimetableSlot) => {
-    if (!currentUser) return;
-    const updatedSlots = slots.map((s) => (s.id === updatedSlot.id ? updatedSlot : s));
-    setSlots(updatedSlots);
-
-    if (!currentUser.isDemo) {
-      await syncSlotUpdate(currentUser.id, updatedSlot);
-    }
-
-    const nextClassISO = getNextSlotDateISO(updatedSlot.dayOfWeek, updatedSlot.startTime);
-    await scheduleClassNotifications(currentUser.id, updatedSlot, nextClassISO, notificationSettings);
-    showSuccess(`Updated ${updatedSlot.subject} class schedule.`);
-  };
-
-  const deleteSlot = async (id: string) => {
-    if (!currentUser) return;
-    setSlots((prev) => prev.filter((s) => s.id !== id));
-    if (!currentUser.isDemo) {
-      await syncSlotDelete(currentUser.id, id);
-    }
-    await cancelItemNotifications(currentUser.id, id);
-    showSuccess('Timetable slot removed.');
-  };
-
-  const addTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'status'>) => {
-    if (!currentUser) return;
-    const computedStatus = calculateTaskStatus(
-      taskData.dueDate,
-      taskData.estimatedHours,
-      taskData.completionPercentage,
-      settings.personalVelocityMultiplier,
-      taskData.hasDeadline ?? true
-    );
-
-    const newTask: Task = {
-      ...taskData,
-      id: generateUUID(),
-      createdAt: new Date().toISOString(),
-      status: computedStatus
-    };
-
-    setTasks((prev) => [newTask, ...prev]);
-
-    if (!currentUser.isDemo) {
-      await syncTaskInsert(currentUser.id, newTask);
-    }
-
-    if (newTask.hasDeadline && newTask.dueDate) {
-      await scheduleTaskNotifications(currentUser.id, newTask, notificationSettings);
-    }
-    showSuccess(`Activity "${newTask.title}" saved.`);
-  };
-
-  const updateTaskProgress = async (taskId: string, percentage: number) => {
-    if (!currentUser) return;
-
-    let updatedTaskObj: Task | null = null;
-
-    setTasks((prevTasks) =>
-      prevTasks.map((t) => {
-        if (t.id === taskId) {
-          const isComplete = percentage >= 100;
-          const updatedStatus = isComplete
-            ? 'completed'
-            : calculateTaskStatus(t.dueDate, t.estimatedHours, percentage, settings.personalVelocityMultiplier, t.hasDeadline ?? true);
-
-          const updatedTask: Task = {
-            ...t,
-            completionPercentage: percentage,
-            status: updatedStatus,
-            completedAt: isComplete ? new Date().toISOString() : t.completedAt
-          };
-
-          updatedTaskObj = updatedTask;
-
-          if (isComplete) {
-            setCompletedTaskForCelebration(updatedTask);
-            cancelItemNotifications(currentUser.id, taskId);
-
-            setDebt((d) => {
-              const newDebt = {
-                ...d,
-                streakDays: d.streakDays + 1,
-                compoundingScore: Math.max(0, d.compoundingScore - 5)
-              };
-              if (!currentUser.isDemo) {
-                syncDebtUpsert(currentUser.id, newDebt);
-              }
-              return newDebt;
-            });
-          }
-
-          return updatedTask;
-        }
-        return t;
-      })
-    );
-
-    if (updatedTaskObj && !currentUser.isDemo) {
-      await syncTaskUpdate(currentUser.id, updatedTaskObj);
-    }
-  };
-
-  const completeTask = async (taskId: string) => {
-    await updateTaskProgress(taskId, 100);
-  };
-
-  const renegotiateTask = async (taskId: string, newDueDate: string, _reason: string) => {
-    if (!currentUser) return;
-
-    let updatedTaskObj: Task | null = null;
-
-    setTasks((prevTasks) =>
-      prevTasks.map((t) => {
-        if (t.id === taskId) {
-          const count = (t.renegotiatedCount || 0) + 1;
-          const newStatus = calculateTaskStatus(newDueDate, t.estimatedHours, t.completionPercentage, settings.personalVelocityMultiplier, true);
-          const obj: Task = {
-            ...t,
-            hasDeadline: true,
-            dueDate: newDueDate,
-            renegotiatedCount: count,
-            lastRenegotiatedAt: new Date().toISOString(),
-            status: newStatus === 'too_late' ? 'tight' : newStatus
-          };
-          updatedTaskObj = obj;
-          return obj;
-        }
-        return t;
-      })
-    );
-
-    if (updatedTaskObj && !currentUser.isDemo) {
-      await syncTaskUpdate(currentUser.id, updatedTaskObj);
-      await scheduleTaskNotifications(currentUser.id, updatedTaskObj, notificationSettings);
-    }
-
-    setDebt((d) => {
-      const newDebt = {
-        ...d,
-        totalHoursBehind: d.totalHoursBehind + 0.5,
-        compoundingScore: Math.min(100, d.compoundingScore + 8)
-      };
-      if (!currentUser.isDemo) {
-        syncDebtUpsert(currentUser.id, newDebt);
-      }
-      return newDebt;
-    });
-
-    showSuccess('Task schedule renegotiated & synced.');
-  };
-
-  const deleteTask = async (id: string) => {
-    if (!currentUser) return;
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-    if (!currentUser.isDemo) {
-      await syncTaskDelete(currentUser.id, id);
-    }
-    await cancelItemNotifications(currentUser.id, id);
-    showSuccess('Task removed.');
-  };
-
-  const logEvidence = async (entryData: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => {
-    if (!currentUser) return;
-    const newEntry: EvidenceEntry = {
-      ...entryData,
-      id: generateUUID(),
-      dateLogged: new Date().toISOString()
-    };
-    setEvidenceEntries((prev) => [newEntry, ...prev]);
-
-    if (!currentUser.isDemo) {
-      await syncEvidenceInsert(currentUser.id, newEntry);
-    }
-    showSuccess('Outcome logged in Case File & permanently saved!');
-  };
-
-  // Immediate permanent Supabase study session insert
-  const addStudyLog = async (logData: Omit<StudyLog, 'id' | 'loggedAt'>) => {
-    if (!currentUser) return;
-
-    const generatedId = generateUUID();
-    const newLog: StudyLog = {
-      ...logData,
-      id: generatedId,
-      loggedAt: new Date().toISOString()
-    };
-
-    // Update local state immediately for instant UI response
-    setStudyLogs((prev) => [newLog, ...prev]);
-
-    if (!currentUser.isDemo) {
-      const dbId = await syncStudyLogInsert(currentUser.id, newLog);
-      if (dbId && dbId !== generatedId) {
-        setStudyLogs((prev) =>
-          prev.map((l) => (l.id === generatedId ? { ...l, id: dbId } : l))
-        );
-      }
-    }
-  };
-
-  const deleteStudyLog = async (id: string) => {
-    if (!currentUser) return;
-    setStudyLogs((prev) => prev.filter((l) => l.id !== id));
-    if (!currentUser.isDemo) {
-      await syncStudyLogDelete(currentUser.id, id);
-    }
-    showSuccess('Study entry removed.');
-  };
-
-  const updateSettings = async (newSettings: Partial<UserSettings>) => {
-    if (!currentUser) return;
-    const updated = { ...settings, ...newSettings };
-    setSettings(updated);
-    if (!currentUser.isDemo) {
-      await syncUserSettings(currentUser.id, updated);
-    }
-    showSuccess('Settings updated and synced.');
-  };
-
-  const updateNotificationSettings = async (newSettings: Partial<NotificationSettings>) => {
-    if (!currentUser) return;
-    const updated = { ...notificationSettings, ...newSettings };
-    setNotificationSettings(updated);
-    if (!currentUser.isDemo) {
-      await syncNotificationSettings(currentUser.id, updated);
-    }
-    showSuccess('Notification preferences saved.');
-  };
+  }, [
+    currentUser,
+    slotsModule.slots,
+    tasksModule.tasks,
+    evidenceModule.evidenceEntries,
+    studyLogsModule.studyLogs,
+    debt,
+    settingsModule.settings,
+    settingsModule.notificationSettings,
+    isLoadingData
+  ]);
 
   const loadPersonaData = (personaId: string) => {
     const bundle = PERSONAS_MAP[personaId] || defaultPersona;
     setCurrentPersonaId(bundle.id);
-    setSlots(bundle.slots);
-    setTasks(bundle.tasks);
-    setEvidenceEntries(bundle.evidenceEntries);
-    setStudyLogs([]);
+    slotsModule.setSlots(bundle.slots);
+    tasksModule.setTasks(bundle.tasks);
+    evidenceModule.setEvidenceEntries(bundle.evidenceEntries);
+    studyLogsModule.setStudyLogs([]);
     setDebt(bundle.debt);
-    setSettings(bundle.settings);
+    settingsModule.setSettings(bundle.settings);
     showSuccess(`Loaded template data: ${bundle.name}`);
   };
 
   const resetAllData = () => {
-    setSlots([]);
-    setTasks([]);
-    setEvidenceEntries([]);
-    setStudyLogs([]);
+    slotsModule.setSlots([]);
+    tasksModule.setTasks([]);
+    evidenceModule.setEvidenceEntries([]);
+    studyLogsModule.setStudyLogs([]);
     setDebt(emptyDebt);
-    setActiveTimer(null);
+    timerModule.cancelGlobalTimer();
     showSuccess('All data reset for active account.');
   };
 
   return {
-    slots,
-    tasks,
-    evidenceEntries,
-    studyLogs,
+    slots: slotsModule.slots,
+    tasks: tasksModule.tasks,
+    evidenceEntries: evidenceModule.evidenceEntries,
+    studyLogs: studyLogsModule.studyLogs,
     debt,
-    settings,
-    notificationSettings,
+    settings: settingsModule.settings,
+    notificationSettings: settingsModule.notificationSettings,
     currentPersonaId,
-    activeTaskForPrediction,
-    activeFocusTask,
+    activeTaskForPrediction: tasksModule.activeTaskForPrediction,
+    activeFocusTask: tasksModule.activeFocusTask,
     completedTaskForCelebration,
     isLoadingData,
-    isNotificationModalOpen,
-    activeTimer,
-    startGlobalTimer,
-    pauseGlobalTimer,
-    resumeGlobalTimer,
-    resetGlobalTimer,
-    setTimerMinimized,
-    stopAndLogTimer,
-    cancelGlobalTimer,
-    setNotificationModalOpen,
-    setActiveTaskForPrediction,
-    setActiveFocusTask,
+    isNotificationModalOpen: settingsModule.isNotificationModalOpen,
+
+    // Timer methods
+    activeTimer: timerModule.activeTimer,
+    startGlobalTimer: timerModule.startGlobalTimer,
+    pauseGlobalTimer: timerModule.pauseGlobalTimer,
+    resumeGlobalTimer: timerModule.resumeGlobalTimer,
+    resetGlobalTimer: timerModule.resetGlobalTimer,
+    setTimerMinimized: timerModule.setTimerMinimized,
+    stopAndLogTimer: timerModule.stopAndLogTimer,
+    cancelGlobalTimer: timerModule.cancelGlobalTimer,
+
+    // State updaters
+    setNotificationModalOpen: settingsModule.setNotificationModalOpen,
+    setActiveTaskForPrediction: tasksModule.setActiveTaskForPrediction,
+    setActiveFocusTask: tasksModule.setActiveFocusTask,
     setCompletedTaskForCelebration,
-    addSlot,
-    updateSlot,
-    deleteSlot,
-    addTask,
-    updateTaskProgress,
-    completeTask,
-    renegotiateTask,
-    deleteTask,
-    logEvidence,
-    addStudyLog,
-    deleteStudyLog,
-    updateSettings,
-    updateNotificationSettings,
+
+    // CRUD operations
+    addSlot: slotsModule.addSlot,
+    updateSlot: slotsModule.updateSlot,
+    deleteSlot: slotsModule.deleteSlot,
+    addTask: tasksModule.addTask,
+    updateTaskProgress: tasksModule.updateTaskProgress,
+    completeTask: tasksModule.completeTask,
+    renegotiateTask: tasksModule.renegotiateTask,
+    deleteTask: tasksModule.deleteTask,
+    logEvidence: evidenceModule.logEvidence,
+    addStudyLog: studyLogsModule.addStudyLog,
+    deleteStudyLog: studyLogsModule.deleteStudyLog,
+    updateSettings: settingsModule.updateSettings,
+    updateNotificationSettings: settingsModule.updateNotificationSettings,
     loadPersonaData,
     resetAllData
   };
