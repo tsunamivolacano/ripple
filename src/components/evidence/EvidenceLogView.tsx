@@ -6,13 +6,16 @@ import {
   Plus, 
   Star, 
   CheckCircle2, 
-  Award 
+  Award,
+  BookOpen,
+  HelpCircle,
+  ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export const EvidenceLogView: React.FC = () => {
-  const { evidenceEntries } = useRipple();
+  const { evidenceEntries, tasks, slots } = useRipple();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Compute stats
@@ -30,7 +33,7 @@ export const EvidenceLogView: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
           <div>
-            <span className="text-xs font-medium text-slate-400">Total Case Files</span>
+            <span className="text-xs font-medium text-slate-400">Total Case File Logs</span>
             <h3 className="text-2xl font-extrabold text-white font-mono mt-0.5">{totalLogged}</h3>
           </div>
           <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -40,7 +43,7 @@ export const EvidenceLogView: React.FC = () => {
 
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
           <div>
-            <span className="text-xs font-medium text-slate-400">On-Time Accuracy Rate</span>
+            <span className="text-xs font-medium text-slate-400">On-Time Completion Rate</span>
             <h3 className="text-2xl font-extrabold text-emerald-400 font-mono mt-0.5">{onTimePercentage}%</h3>
           </div>
           <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -50,7 +53,7 @@ export const EvidenceLogView: React.FC = () => {
 
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
           <div>
-            <span className="text-xs font-medium text-slate-400">AI Prediction Rating</span>
+            <span className="text-xs font-medium text-slate-400">AI Calibration Accuracy</span>
             <h3 className="text-2xl font-extrabold text-amber-300 font-mono mt-0.5">{avgAccuracy} / 5.0</h3>
           </div>
           <div className="p-3 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
@@ -64,10 +67,10 @@ export const EvidenceLogView: React.FC = () => {
         <div>
           <h2 className="text-base font-extrabold text-white flex items-center gap-2">
             <Award className="w-5 h-5 text-amber-400" />
-            Personal Calibration & Evidence Case Log
+            Study Context & Case File History
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Compare predicted AI consequences against real outcomes to continuously refine your urgency calibration.
+            Your Case File captures your full study context: subjects, goals, teacher strictness habits, and actual performance outcomes compared against predicted scenarios.
           </p>
         </div>
 
@@ -108,7 +111,7 @@ export const EvidenceLogView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
-                  <span className="text-xs font-medium text-slate-400">Prediction Accuracy:</span>
+                  <span className="text-xs font-medium text-slate-400">AI Accuracy:</span>
                   <div className="flex text-amber-400">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <Star
@@ -123,7 +126,7 @@ export const EvidenceLogView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
                   <span className="font-semibold text-amber-400 block text-[11px] uppercase tracking-wider">
-                    AI Forecast Scenario:
+                    AI Forecasted Scenario:
                   </span>
                   <p className="text-slate-300">
                     {entry.predictedScenario}
@@ -151,9 +154,9 @@ export const EvidenceLogView: React.FC = () => {
       ) : (
         <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800 space-y-2">
           <FileText className="w-8 h-8 text-slate-500 mx-auto" />
-          <h3 className="text-sm font-bold text-white">No Case File Logged Yet</h3>
+          <h3 className="text-sm font-bold text-white">No Case Files Logged Yet</h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Log your outcomes after deadlines pass to help RIPPLE calibrate its dynamic prediction engine.
+            Log outcomes after submitting assignments to build your personal Case File study context.
           </p>
         </div>
       )}

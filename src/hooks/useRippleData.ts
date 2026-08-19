@@ -11,6 +11,8 @@ import {
 } from '@/types/ripple';
 import { calculateTaskStatus } from '@/utils/timeUtils';
 import { safeGetStorage, safeSetStorage } from '@/utils/storageUtils';
+import { generateUUID } from '@/utils/uuidUtils';
+import { calculateUnifiedDebt } from '@/utils/studyDebtUtils';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { showSuccess, showError } from '@/utils/toast';
 import { 
@@ -51,14 +53,18 @@ const emptyDebt: ProcrastinationDebt = {
     { day: 'Fri', debtHours: 0 },
     { day: 'Sat', debtHours: 0 },
     { day: 'Sun', debtHours: 0 }
-  ]
+  ],
+  dailyTargetHours: 3.0,
+  recommendedNextDayTargetHours: 3.0,
+  studyDeficitHours: 0
 };
 
 const emptySettings: UserSettings = {
   intensityMode: 'standard',
   isMinorProfile: false,
   weeklyDigestOnly: false,
-  personalVelocityMultiplier: 1.0
+  personalVelocityMultiplier: 1.0,
+  dailyStudyTargetHours: 3.0
 };
 
 const defaultNotificationSettings: NotificationSettings = {
@@ -70,7 +76,6 @@ const defaultNotificationSettings: NotificationSettings = {
 
 export function useRippleData(currentUser: UserAccount | null) {
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [currentPersonaId, setCurrentPersonaId] = useState<string>('riya');
   
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
@@ -97,7 +102,7 @@ export function useRippleData(currentUser: UserAccount | null) {
     safeSetStorage('ripple_active_timer', activeTimer);
   }, [activeTimer]);
 
-  // Load account data when currentUser changes (Cloud-first with cached fallback)
+  // Load account data when currentUser changes (Cloud-first)
   useEffect(() => {
     let isCancelled = false;
 
@@ -130,7 +135,7 @@ export function useRippleData(currentUser: UserAccount | null) {
         return;
       }
 
-      // Live Authenticated User: Load from Supabase Cloud directly
+      // Live Authenticated User: Load from Supabase Cloud
       try {
         const cloudData = await loadUserCloudData(currentUser.id);
         if (!isCancelled) {
@@ -157,6 +162,19 @@ export function useRippleData(currentUser: UserAccount | null) {
       isCancelled = true;
     };
   }, [currentUser?.id]);
+
+  // Recompute unified study debt & daily shortfall whenever study logs or tasks change
+  useEffect(() => {
+    if (!isLoadingData && currentUser) {
+      const targetHours = settings.dailyStudyTargetHours || 3.0;
+      const recomputedDebt = calculateUnifiedDebt(studyLogs, tasks, targetHours, debt.streakDays);
+      setDebt(recomputedDebt);
+
+      if (!currentUser.isDemo) {
+        syncDebtUpsert(currentUser.id, recomputedDebt);
+      }
+    }
+  }, [studyLogs.length, tasks, settings.dailyStudyTargetHours]);
 
   // Local storage persistence backup for offline resilience
   useEffect(() => {
@@ -200,7 +218,7 @@ export function useRippleData(currentUser: UserAccount | null) {
           } catch {}
         }
 
-        showSuccess(`🎯 Sprint Complete! Logged +${loggedMins}m of study time.`);
+        showSuccess(`🎯 Sprint Complete! Saved +${loggedMins}m to Supabase Study Log.`);
         setActiveTimer(null);
       } else {
         setActiveTimer((prev) => (prev ? { ...prev, secondsLeft } : null));
@@ -243,7 +261,7 @@ export function useRippleData(currentUser: UserAccount | null) {
     const targetEnd = now + totalSecs * 1000;
 
     const timerObj: ActiveTimerState = {
-      id: `timer-${now}`,
+      id: generateUUID(),
       taskId: params.taskId,
       taskTitle: params.taskTitle,
       subject: params.subject,
@@ -302,14 +320,14 @@ export function useRippleData(currentUser: UserAccount | null) {
     setActiveTimer((prev) => (prev ? { ...prev, isMinimized: minimized } : null));
   };
 
-  const stopAndLogTimer = () => {
+  const stopAndLogTimer = async () => {
     const current = activeTimer;
     if (!current) return;
 
     const elapsedSeconds = current.totalSeconds - current.secondsLeft;
     const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
 
-    addStudyLog({
+    await addStudyLog({
       subject: current.subject || 'General Study',
       durationMinutes: elapsedMinutes,
       topic: `Focus Session: ${current.taskTitle}`,
@@ -317,7 +335,7 @@ export function useRippleData(currentUser: UserAccount | null) {
     });
 
     setActiveTimer(null);
-    showSuccess(`Logged +${elapsedMinutes}m study session.`);
+    showSuccess(`Saved +${elapsedMinutes}m study session to Supabase.`);
   };
 
   const cancelGlobalTimer = () => {
@@ -326,7 +344,7 @@ export function useRippleData(currentUser: UserAccount | null) {
 
   const addSlot = async (slotData: Omit<TimetableSlot, 'id'>) => {
     if (!currentUser) return;
-    const newSlot: TimetableSlot = { ...slotData, id: `slot-${Date.now()}` };
+    const newSlot: TimetableSlot = { ...slotData, id: generateUUID() };
     const updatedSlots = [...slots, newSlot];
     setSlots(updatedSlots);
 
@@ -336,7 +354,7 @@ export function useRippleData(currentUser: UserAccount | null) {
 
     const nextClassISO = getNextSlotDateISO(newSlot.dayOfWeek, newSlot.startTime);
     await scheduleClassNotifications(currentUser.id, newSlot, nextClassISO, notificationSettings);
-    showSuccess(`Timetable slot for ${newSlot.subject} saved and synced.`);
+    showSuccess(`Timetable slot for ${newSlot.subject} saved.`);
   };
 
   const updateSlot = async (updatedSlot: TimetableSlot) => {
@@ -375,7 +393,7 @@ export function useRippleData(currentUser: UserAccount | null) {
 
     const newTask: Task = {
       ...taskData,
-      id: `task-${Date.now()}`,
+      id: generateUUID(),
       createdAt: new Date().toISOString(),
       status: computedStatus
     };
@@ -389,7 +407,7 @@ export function useRippleData(currentUser: UserAccount | null) {
     if (newTask.hasDeadline && newTask.dueDate) {
       await scheduleTaskNotifications(currentUser.id, newTask, notificationSettings);
     }
-    showSuccess(`Activity "${newTask.title}" saved & synced.`);
+    showSuccess(`Activity "${newTask.title}" saved.`);
   };
 
   const updateTaskProgress = async (taskId: string, percentage: number) => {
@@ -488,7 +506,7 @@ export function useRippleData(currentUser: UserAccount | null) {
       return newDebt;
     });
 
-    showSuccess('Task schedule renegotiated & synced to database.');
+    showSuccess('Task schedule renegotiated & synced.');
   };
 
   const deleteTask = async (id: string) => {
@@ -505,26 +523,38 @@ export function useRippleData(currentUser: UserAccount | null) {
     if (!currentUser) return;
     const newEntry: EvidenceEntry = {
       ...entryData,
-      id: `ev-${Date.now()}`,
+      id: generateUUID(),
       dateLogged: new Date().toISOString()
     };
     setEvidenceEntries((prev) => [newEntry, ...prev]);
+
     if (!currentUser.isDemo) {
       await syncEvidenceInsert(currentUser.id, newEntry);
     }
-    showSuccess('Outcome logged in Evidence Case File & synced!');
+    showSuccess('Outcome logged in Case File & permanently saved!');
   };
 
+  // Immediate permanent Supabase study session insert
   const addStudyLog = async (logData: Omit<StudyLog, 'id' | 'loggedAt'>) => {
     if (!currentUser) return;
+
+    const generatedId = generateUUID();
     const newLog: StudyLog = {
       ...logData,
-      id: `study-${Date.now()}`,
+      id: generatedId,
       loggedAt: new Date().toISOString()
     };
+
+    // Update local state immediately for instant UI response
     setStudyLogs((prev) => [newLog, ...prev]);
+
     if (!currentUser.isDemo) {
-      await syncStudyLogInsert(currentUser.id, newLog);
+      const dbId = await syncStudyLogInsert(currentUser.id, newLog);
+      if (dbId && dbId !== generatedId) {
+        setStudyLogs((prev) =>
+          prev.map((l) => (l.id === generatedId ? { ...l, id: dbId } : l))
+        );
+      }
     }
   };
 

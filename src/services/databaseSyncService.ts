@@ -12,6 +12,8 @@ import {
   TaskCategory
 } from '@/types/ripple';
 import { safeGetStorage, safeSetStorage } from '@/utils/storageUtils';
+import { isValidUUID, generateUUID } from '@/utils/uuidUtils';
+import { calculateUnifiedDebt } from '@/utils/studyDebtUtils';
 
 export interface UserFullData {
   slots: TimetableSlot[];
@@ -23,27 +25,12 @@ export interface UserFullData {
   notificationSettings: NotificationSettings;
 }
 
-const defaultDebt: ProcrastinationDebt = {
-  totalHoursBehind: 0,
-  missedDeadlinesCount: 0,
-  streakDays: 0,
-  compoundingScore: 0,
-  weeklyDebtTrend: [
-    { day: 'Mon', debtHours: 0 },
-    { day: 'Tue', debtHours: 0 },
-    { day: 'Wed', debtHours: 0 },
-    { day: 'Thu', debtHours: 0 },
-    { day: 'Fri', debtHours: 0 },
-    { day: 'Sat', debtHours: 0 },
-    { day: 'Sun', debtHours: 0 }
-  ]
-};
-
 const defaultSettings: UserSettings = {
   intensityMode: 'standard',
   isMinorProfile: false,
   weeklyDigestOnly: false,
-  personalVelocityMultiplier: 1.0
+  personalVelocityMultiplier: 1.0,
+  dailyStudyTargetHours: 3.0
 };
 
 const defaultNotifSettings: NotificationSettings = {
@@ -54,54 +41,47 @@ const defaultNotifSettings: NotificationSettings = {
 };
 
 /**
- * Fetch all user records from Supabase directly.
- * Also merges with local cached records safely if any unsynced offline records exist.
+ * Load all records from Supabase directly as the primary single source of truth.
  */
 export async function loadUserCloudData(userId: string): Promise<UserFullData> {
   const localSlots = safeGetStorage<TimetableSlot[]>(`ripple_slots_${userId}`, []);
   const localTasks = safeGetStorage<Task[]>(`ripple_tasks_${userId}`, []);
   const localEvidence = safeGetStorage<EvidenceEntry[]>(`ripple_evidence_${userId}`, []);
   const localStudy = safeGetStorage<StudyLog[]>(`ripple_study_${userId}`, []);
-  const localDebt = safeGetStorage<ProcrastinationDebt>(`ripple_debt_${userId}`, defaultDebt);
   const localSettings = safeGetStorage<UserSettings>(`ripple_settings_${userId}`, defaultSettings);
   const localNotifSettings = safeGetStorage<NotificationSettings>(`ripple_notif_settings_${userId}`, defaultNotifSettings);
 
   try {
-    // 1. Fetch Slots
-    const { data: dbSlots, error: slotsErr } = await supabase
-      .from('timetable_slots')
+    // 1. Fetch Study Logs from Supabase
+    let studyLogs: StudyLog[] = [];
+    const { data: dbStudy, error: studyErr } = await supabase
+      .from('study_logs')
       .select('*')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .order('logged_at', { ascending: false });
 
-    let slots: TimetableSlot[] = localSlots;
-    if (!slotsErr && dbSlots) {
-      slots = dbSlots.map((s) => ({
-        id: s.id,
-        subject: s.subject,
-        dayOfWeek: s.day_of_week as any,
-        startTime: s.start_time,
-        endTime: s.end_time,
-        room: s.room || '',
-        teacherName: s.teacher_name || '',
-        strictnessTag: (s.strictness_tag as any) || 'NOTEBOOK_CHECK',
-        stakesTag: (s.stakes_tag as any) || 'HOMEWORK',
-        weight: Number(s.weight) || 20,
-        reminders: (s.reminders as any) || ['15m'],
-        recurrence: (s.recurrence as any) || { type: 'weekly' },
-        specificDate: s.specific_date || undefined,
-        notes: s.notes || undefined
+    if (!studyErr && dbStudy) {
+      studyLogs = dbStudy.map((l) => ({
+        id: l.id,
+        subject: l.subject,
+        durationMinutes: Number(l.duration_minutes) || 0,
+        topic: l.topic || undefined,
+        loggedAt: l.logged_at || l.created_at || new Date().toISOString(),
+        source: (l.source as any) || 'manual'
       }));
-      safeSetStorage(`ripple_slots_${userId}`, slots);
+      safeSetStorage(`ripple_study_${userId}`, studyLogs);
+    } else {
+      studyLogs = localStudy;
     }
 
-    // 2. Fetch Tasks
+    // 2. Fetch Tasks from Supabase
+    let tasks: Task[] = [];
     const { data: dbTasks, error: tasksErr } = await supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    let tasks: Task[] = localTasks;
     if (!tasksErr && dbTasks) {
       tasks = dbTasks.map((t) => ({
         id: t.id,
@@ -123,16 +103,47 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
         lastRenegotiatedAt: t.last_renegotiated || undefined
       }));
       safeSetStorage(`ripple_tasks_${userId}`, tasks);
+    } else {
+      tasks = localTasks;
     }
 
-    // 3. Fetch Evidence Entries
+    // 3. Fetch Timetable Slots from Supabase
+    let slots: TimetableSlot[] = [];
+    const { data: dbSlots, error: slotsErr } = await supabase
+      .from('timetable_slots')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (!slotsErr && dbSlots) {
+      slots = dbSlots.map((s) => ({
+        id: s.id,
+        subject: s.subject,
+        dayOfWeek: s.day_of_week as any,
+        startTime: s.start_time,
+        endTime: s.end_time,
+        room: s.room || '',
+        teacherName: s.teacher_name || '',
+        strictnessTag: (s.strictness_tag as any) || 'NOTEBOOK_CHECK',
+        stakesTag: (s.stakes_tag as any) || 'HOMEWORK',
+        weight: Number(s.weight) || 20,
+        reminders: (s.reminders as any) || ['15m'],
+        recurrence: (s.recurrence as any) || { type: 'weekly' },
+        specificDate: s.specific_date || undefined,
+        notes: s.notes || undefined
+      }));
+      safeSetStorage(`ripple_slots_${userId}`, slots);
+    } else {
+      slots = localSlots;
+    }
+
+    // 4. Fetch Evidence Case Files from Supabase
+    let evidenceEntries: EvidenceEntry[] = [];
     const { data: dbEvidence, error: evErr } = await supabase
       .from('evidence_entries')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    let evidenceEntries: EvidenceEntry[] = localEvidence;
     if (!evErr && dbEvidence) {
       evidenceEntries = dbEvidence.map((e) => ({
         id: e.id,
@@ -148,73 +159,37 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
         userNotes: e.user_notes || undefined
       }));
       safeSetStorage(`ripple_evidence_${userId}`, evidenceEntries);
+    } else {
+      evidenceEntries = localEvidence;
     }
 
-    // 4. Fetch Study Logs
-    const { data: dbStudy, error: studyErr } = await supabase
-      .from('study_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .order('logged_at', { ascending: false });
-
-    let studyLogs: StudyLog[] = localStudy;
-    if (!studyErr && dbStudy) {
-      studyLogs = dbStudy.map((l) => ({
-        id: l.id,
-        subject: l.subject,
-        durationMinutes: l.duration_minutes,
-        topic: l.topic || undefined,
-        loggedAt: l.logged_at || l.created_at || new Date().toISOString(),
-        source: (l.source as any) || 'manual'
-      }));
-      safeSetStorage(`ripple_study_${userId}`, studyLogs);
-    }
-
-    // 5. Fetch Debt
-    const { data: dbDebt, error: debtErr } = await supabase
-      .from('procrastination_debt')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    let debt: ProcrastinationDebt = localDebt;
-    if (!debtErr && dbDebt) {
-      debt = {
-        totalHoursBehind: Number(dbDebt.total_hours_behind) || 0,
-        missedDeadlinesCount: Number(dbDebt.missed_deadlines_count) || 0,
-        streakDays: Number(dbDebt.streak_days) || 0,
-        compoundingScore: Number(dbDebt.compounding_score) || 0,
-        weeklyDebtTrend: (dbDebt.weekly_debt_trend as any) || defaultDebt.weeklyDebtTrend
-      };
-      safeSetStorage(`ripple_debt_${userId}`, debt);
-    }
-
-    // 6. Fetch User Settings
+    // 5. Fetch User Settings
+    let settings: UserSettings = localSettings;
     const { data: dbSettings, error: setErr } = await supabase
       .from('user_settings')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
 
-    let settings: UserSettings = localSettings;
     if (!setErr && dbSettings) {
       settings = {
         intensityMode: (dbSettings.intensity_mode as any) || 'standard',
         isMinorProfile: Boolean(dbSettings.is_minor_profile),
         weeklyDigestOnly: Boolean(dbSettings.weekly_digest_only),
-        personalVelocityMultiplier: Number(dbSettings.personal_velocity_multiplier) || 1.0
+        personalVelocityMultiplier: Number(dbSettings.personal_velocity_multiplier) || 1.0,
+        dailyStudyTargetHours: 3.0
       };
       safeSetStorage(`ripple_settings_${userId}`, settings);
     }
 
-    // 7. Fetch Notification Settings
+    // 6. Fetch Notification Settings
+    let notificationSettings: NotificationSettings = localNotifSettings;
     const { data: dbNotif, error: notifErr } = await supabase
       .from('notification_settings')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
 
-    let notificationSettings: NotificationSettings = localNotifSettings;
     if (!notifErr && dbNotif) {
       notificationSettings = {
         taskRemindersEnabled: dbNotif.task_reminders_enabled ?? true,
@@ -224,6 +199,11 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       };
       safeSetStorage(`ripple_notif_settings_${userId}`, notificationSettings);
     }
+
+    // 7. Calculate real-time persistent debt & shortfall from actual study logs & tasks
+    const targetHours = settings.dailyStudyTargetHours || 3.0;
+    const debt = calculateUnifiedDebt(studyLogs, tasks, targetHours, 1);
+    safeSetStorage(`ripple_debt_${userId}`, debt);
 
     return {
       slots,
@@ -235,16 +215,58 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       notificationSettings
     };
   } catch (err) {
-    console.warn('[databaseSyncService] Network/auth warning, using resilient local storage:', err);
+    console.warn('[databaseSyncService] Network notice, using local cache backup:', err);
+    const targetHours = localSettings.dailyStudyTargetHours || 3.0;
+    const debt = calculateUnifiedDebt(localStudy, localTasks, targetHours, 1);
+
     return {
       slots: localSlots,
       tasks: localTasks,
       evidenceEntries: localEvidence,
       studyLogs: localStudy,
-      debt: localDebt,
+      debt,
       settings: localSettings,
       notificationSettings: localNotifSettings
     };
+  }
+}
+
+/**
+ * Study Log Database Operations (Guaranteed Supabase UUID Insert)
+ */
+export async function syncStudyLogInsert(userId: string, log: StudyLog): Promise<string | null> {
+  try {
+    const validId = isValidUUID(log.id) ? log.id : generateUUID();
+
+    const payload = {
+      id: validId,
+      user_id: userId,
+      subject: log.subject,
+      duration_minutes: log.durationMinutes,
+      topic: log.topic || null,
+      logged_at: log.loggedAt || new Date().toISOString(),
+      source: log.source || 'manual'
+    };
+
+    const { data, error } = await supabase.from('study_logs').insert(payload).select('id').single();
+    if (error) {
+      console.error('[databaseSyncService] Error inserting study log into Supabase:', error);
+      return null;
+    }
+    return data?.id || validId;
+  } catch (e) {
+    console.error('[databaseSyncService] Study log insert exception:', e);
+    return null;
+  }
+}
+
+export async function syncStudyLogDelete(userId: string, logId: string): Promise<void> {
+  try {
+    if (isValidUUID(logId)) {
+      await supabase.from('study_logs').delete().eq('id', logId).eq('user_id', userId);
+    }
+  } catch (e) {
+    console.error('[databaseSyncService] Study log delete exception:', e);
   }
 }
 
@@ -253,8 +275,10 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
  */
 export async function syncTaskInsert(userId: string, task: Task): Promise<void> {
   try {
-    const payload: any = {
-      id: task.id,
+    const validId = isValidUUID(task.id) ? task.id : generateUUID();
+
+    const payload = {
+      id: validId,
       user_id: userId,
       title: task.title,
       description: task.description || null,
@@ -270,18 +294,18 @@ export async function syncTaskInsert(userId: string, task: Task): Promise<void> 
       priority: task.status === 'critical' || task.status === 'too_late' ? 'high' : 'medium',
       reminders: task.reminders || ['15m', 'exact'],
       recurrence: task.recurrence || null,
-      created_at: task.createdAt
+      created_at: task.createdAt || new Date().toISOString()
     };
 
     await supabase.from('tasks').upsert(payload);
   } catch (e) {
-    console.warn('[databaseSyncService] Task insert pending offline sync:', e);
+    console.warn('[databaseSyncService] Task insert notice:', e);
   }
 }
 
 export async function syncTaskUpdate(userId: string, task: Task): Promise<void> {
   try {
-    const payload: any = {
+    const payload = {
       title: task.title,
       description: task.description || null,
       slot_id: task.slotId || null,
@@ -302,7 +326,7 @@ export async function syncTaskUpdate(userId: string, task: Task): Promise<void> 
 
     await supabase.from('tasks').update(payload).eq('id', task.id).eq('user_id', userId);
   } catch (e) {
-    console.warn('[databaseSyncService] Task update pending offline sync:', e);
+    console.warn('[databaseSyncService] Task update notice:', e);
   }
 }
 
@@ -310,7 +334,7 @@ export async function syncTaskDelete(userId: string, taskId: string): Promise<vo
   try {
     await supabase.from('tasks').delete().eq('id', taskId).eq('user_id', userId);
   } catch (e) {
-    console.warn('[databaseSyncService] Task delete error:', e);
+    console.warn('[databaseSyncService] Task delete notice:', e);
   }
 }
 
@@ -319,15 +343,15 @@ export async function syncTaskDelete(userId: string, taskId: string): Promise<vo
  */
 export async function syncSlotInsert(userId: string, slot: TimetableSlot): Promise<void> {
   try {
-    const payload: any = {
+    const payload = {
       id: slot.id,
       user_id: userId,
       subject: slot.subject,
       day_of_week: slot.dayOfWeek,
       start_time: slot.startTime,
       end_time: slot.endTime,
-      room: slot.room,
-      teacher_name: slot.teacherName,
+      room: slot.room || '',
+      teacher_name: slot.teacherName || '',
       strictness_tag: slot.strictnessTag,
       stakes_tag: slot.stakesTag,
       weight: slot.weight,
@@ -339,19 +363,19 @@ export async function syncSlotInsert(userId: string, slot: TimetableSlot): Promi
 
     await supabase.from('timetable_slots').upsert(payload);
   } catch (e) {
-    console.warn('[databaseSyncService] Slot insert pending offline sync:', e);
+    console.warn('[databaseSyncService] Slot insert notice:', e);
   }
 }
 
 export async function syncSlotUpdate(userId: string, slot: TimetableSlot): Promise<void> {
   try {
-    const payload: any = {
+    const payload = {
       subject: slot.subject,
       day_of_week: slot.dayOfWeek,
       start_time: slot.startTime,
       end_time: slot.endTime,
-      room: slot.room,
-      teacher_name: slot.teacherName,
+      room: slot.room || '',
+      teacher_name: slot.teacherName || '',
       strictness_tag: slot.strictnessTag,
       stakes_tag: slot.stakesTag,
       weight: slot.weight,
@@ -363,7 +387,7 @@ export async function syncSlotUpdate(userId: string, slot: TimetableSlot): Promi
 
     await supabase.from('timetable_slots').update(payload).eq('id', slot.id).eq('user_id', userId);
   } catch (e) {
-    console.warn('[databaseSyncService] Slot update pending offline sync:', e);
+    console.warn('[databaseSyncService] Slot update notice:', e);
   }
 }
 
@@ -371,46 +395,19 @@ export async function syncSlotDelete(userId: string, slotId: string): Promise<vo
   try {
     await supabase.from('timetable_slots').delete().eq('id', slotId).eq('user_id', userId);
   } catch (e) {
-    console.warn('[databaseSyncService] Slot delete error:', e);
+    console.warn('[databaseSyncService] Slot delete notice:', e);
   }
 }
 
 /**
- * Study Log Database Operations
+ * Evidence Case File Database Operations (Guaranteed Supabase UUID Insert)
  */
-export async function syncStudyLogInsert(userId: string, log: StudyLog): Promise<void> {
+export async function syncEvidenceInsert(userId: string, entry: EvidenceEntry): Promise<string | null> {
   try {
-    const payload: any = {
-      id: log.id,
-      user_id: userId,
-      subject: log.subject,
-      duration_minutes: log.durationMinutes,
-      topic: log.topic || null,
-      logged_at: log.loggedAt,
-      source: log.source || 'manual'
-    };
+    const validId = isValidUUID(entry.id) ? entry.id : generateUUID();
 
-    await supabase.from('study_logs').upsert(payload);
-  } catch (e) {
-    console.warn('[databaseSyncService] Study log insert error:', e);
-  }
-}
-
-export async function syncStudyLogDelete(userId: string, logId: string): Promise<void> {
-  try {
-    await supabase.from('study_logs').delete().eq('id', logId).eq('user_id', userId);
-  } catch (e) {
-    console.warn('[databaseSyncService] Study log delete error:', e);
-  }
-}
-
-/**
- * Evidence Entry Database Operations
- */
-export async function syncEvidenceInsert(userId: string, entry: EvidenceEntry): Promise<void> {
-  try {
-    const payload: any = {
-      id: entry.id,
+    const payload = {
+      id: validId,
       user_id: userId,
       task_id: entry.taskId,
       task_title: entry.taskTitle,
@@ -420,22 +417,28 @@ export async function syncEvidenceInsert(userId: string, entry: EvidenceEntry): 
       actual_outcome: entry.actualOutcome || null,
       was_on_time: entry.wasOnTime,
       accuracy_rating: entry.accuracyRating,
-      date_logged: entry.dateLogged,
+      date_logged: entry.dateLogged || new Date().toISOString(),
       user_notes: entry.userNotes || null
     };
 
-    await supabase.from('evidence_entries').upsert(payload);
+    const { data, error } = await supabase.from('evidence_entries').insert(payload).select('id').single();
+    if (error) {
+      console.error('[databaseSyncService] Error inserting evidence entry:', error);
+      return null;
+    }
+    return data?.id || validId;
   } catch (e) {
-    console.warn('[databaseSyncService] Evidence insert error:', e);
+    console.error('[databaseSyncService] Evidence insert exception:', e);
+    return null;
   }
 }
 
 /**
- * Debt & Settings Operations
+ * Debt & User Settings Operations
  */
 export async function syncDebtUpsert(userId: string, debt: ProcrastinationDebt): Promise<void> {
   try {
-    const payload: any = {
+    const payload = {
       user_id: userId,
       total_hours_behind: debt.totalHoursBehind,
       missed_deadlines_count: debt.missedDeadlinesCount,
@@ -456,13 +459,13 @@ export async function syncDebtUpsert(userId: string, debt: ProcrastinationDebt):
       await supabase.from('procrastination_debt').insert(payload);
     }
   } catch (e) {
-    console.warn('[databaseSyncService] Debt upsert error:', e);
+    console.warn('[databaseSyncService] Debt upsert notice:', e);
   }
 }
 
 export async function syncUserSettings(userId: string, settings: UserSettings): Promise<void> {
   try {
-    const payload: any = {
+    const payload = {
       user_id: userId,
       intensity_mode: settings.intensityMode,
       is_minor_profile: settings.isMinorProfile,
@@ -472,13 +475,13 @@ export async function syncUserSettings(userId: string, settings: UserSettings): 
 
     await supabase.from('user_settings').upsert(payload);
   } catch (e) {
-    console.warn('[databaseSyncService] User settings upsert error:', e);
+    console.warn('[databaseSyncService] User settings upsert notice:', e);
   }
 }
 
 export async function syncNotificationSettings(userId: string, settings: NotificationSettings): Promise<void> {
   try {
-    const payload: any = {
+    const payload = {
       user_id: userId,
       task_reminders_enabled: settings.taskRemindersEnabled,
       class_reminders_enabled: settings.classRemindersEnabled,
@@ -488,6 +491,6 @@ export async function syncNotificationSettings(userId: string, settings: Notific
 
     await supabase.from('notification_settings').upsert(payload);
   } catch (e) {
-    console.warn('[databaseSyncService] Notification settings upsert error:', e);
+    console.warn('[databaseSyncService] Notification settings notice:', e);
   }
 }
