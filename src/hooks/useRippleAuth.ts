@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { safeGetStorage, safeSetStorage, getLocalUserId } from '@/utils/storageUtils';
+import { safeGetStorage, safeSetStorage } from '@/utils/storageUtils';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { showSuccess, showError } from '@/utils/toast';
 
@@ -15,6 +15,7 @@ export interface UserAccount {
 export interface AuthResponse {
   success: boolean;
   error?: string;
+  needsEmailConfirmation?: boolean;
 }
 
 export function useRippleAuth() {
@@ -23,31 +24,37 @@ export function useRippleAuth() {
   );
 
   useEffect(() => {
-    // Initial Supabase Session Sync
+    // 1. Check existing active Supabase session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (session?.user) {
         const acc: UserAccount = {
           id: session.user.id,
-          email: session.user.email || '',
+          email: session.user.email?.toLowerCase() || '',
           isDemo: false
         };
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
+      } else {
+        const stored = safeGetStorage<UserAccount | null>('ripple_active_user', null);
+        if (stored && !stored.isDemo) {
+          // No active Supabase session found
+          setCurrentUser(null);
+          localStorage.removeItem('ripple_active_user');
+        }
       }
     });
 
-    // Listen for Auth changes across tabs/windows
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 2. Listen to real-time auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         const acc: UserAccount = {
           id: session.user.id,
-          email: session.user.email || '',
+          email: session.user.email?.toLowerCase() || '',
           isDemo: false
         };
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
-      } else if (_event === 'SIGNED_OUT') {
-        // If current user wasn't a demo account, clear session
+      } else if (event === 'SIGNED_OUT') {
         const stored = safeGetStorage<UserAccount | null>('ripple_active_user', null);
         if (stored && !stored.isDemo) {
           setCurrentUser(null);
@@ -60,9 +67,9 @@ export function useRippleAuth() {
   }, []);
 
   const loginWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !password) {
-      return { success: false, error: 'Please enter both email and password.' };
+      return { success: false, error: 'Please enter both your email address and password.' };
     }
 
     try {
@@ -72,52 +79,46 @@ export function useRippleAuth() {
       });
 
       if (error) {
-        // Check if user exists in auth or if password is valid
-        if (error.message.toLowerCase().includes('invalid login credentials')) {
-          // Attempt automatic signup if first-time user
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: cleanEmail,
-            password: password
-          });
-
-          if (!signUpError && signUpData?.user) {
-            const acc: UserAccount = {
-              id: signUpData.user.id,
-              email: signUpData.user.email || cleanEmail,
-              isDemo: false
-            };
-            setCurrentUser(acc);
-            safeSetStorage('ripple_active_user', acc);
-            showSuccess(`Welcome! Account created & signed in as ${cleanEmail}`);
-            return { success: true };
-          }
+        const msg = error.message.toLowerCase();
+        if (msg.includes('email not confirmed')) {
+          return {
+            success: false,
+            needsEmailConfirmation: true,
+            error: 'Your email address has not been confirmed yet. Please check your inbox or click Resend Confirmation below.'
+          };
+        }
+        if (msg.includes('invalid login credentials')) {
+          return {
+            success: false,
+            error: 'Invalid email or password. If you have not created an account yet, please use the Create Account tab.'
+          };
         }
         return { success: false, error: error.message };
       }
 
-      if (data?.user) {
+      if (data?.session && data?.user) {
         const acc: UserAccount = {
           id: data.user.id,
-          email: data.user.email || cleanEmail,
+          email: data.user.email?.toLowerCase() || cleanEmail,
           isDemo: false
         };
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
-        showSuccess(`Signed in as ${cleanEmail}`);
+        showSuccess(`Welcome back! Signed in as ${cleanEmail}`);
         return { success: true };
       }
     } catch (e: any) {
-      console.warn('Auth exception, preserving safe local access:', e);
-      return { success: false, error: e?.message || 'Authentication error' };
+      console.error('[useRippleAuth] Login exception:', e);
+      return { success: false, error: e?.message || 'Authentication error. Please check your connection.' };
     }
 
-    return { success: false, error: 'Unable to authenticate. Please check your connection.' };
+    return { success: false, error: 'Unable to authenticate. Please verify your credentials.' };
   };
 
   const signUpWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !password) {
-      return { success: false, error: 'Please enter both email and password.' };
+      return { success: false, error: 'Please provide both email and password.' };
     }
 
     if (password.length < 6) {
@@ -131,30 +132,69 @@ export function useRippleAuth() {
       });
 
       if (error) {
-        // If already registered, attempt login
-        if (error.message.toLowerCase().includes('already registered')) {
-          return await loginWithEmail(cleanEmail, password);
+        const msg = error.message.toLowerCase();
+        if (msg.includes('already registered')) {
+          return {
+            success: false,
+            error: 'An account with this email already exists. Please switch to the Sign In tab.'
+          };
         }
         return { success: false, error: error.message };
       }
 
       if (data?.user) {
-        const acc: UserAccount = {
-          id: data.user.id,
-          email: data.user.email || cleanEmail,
-          isDemo: false
-        };
-        setCurrentUser(acc);
-        safeSetStorage('ripple_active_user', acc);
-        showSuccess(`Account created & signed in!`);
-        return { success: true };
+        // If session was returned immediately (email confirmation disabled in Supabase)
+        if (data.session) {
+          const acc: UserAccount = {
+            id: data.user.id,
+            email: data.user.email?.toLowerCase() || cleanEmail,
+            isDemo: false
+          };
+          setCurrentUser(acc);
+          safeSetStorage('ripple_active_user', acc);
+          showSuccess(`Account created & signed in as ${cleanEmail}!`);
+          return { success: true };
+        } else {
+          // Confirmation email was dispatched
+          return {
+            success: true,
+            needsEmailConfirmation: true,
+            error: `Account created! We've sent a verification link to ${cleanEmail}. Please check your inbox (and spam folder) to confirm.`
+          };
+        }
       }
     } catch (e: any) {
-      console.warn('Signup exception:', e);
-      return { success: false, error: e?.message || 'Registration error' };
+      console.error('[useRippleAuth] Signup exception:', e);
+      return { success: false, error: e?.message || 'Registration error.' };
     }
 
     return { success: false, error: 'Failed to create account.' };
+  };
+
+  const resendConfirmationEmail = async (email: string): Promise<boolean> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      showError('Please enter your email address.');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: cleanEmail
+      });
+
+      if (error) {
+        showError(error.message);
+        return false;
+      }
+
+      showSuccess(`Verification email resent to ${cleanEmail}. Please check your inbox!`);
+      return true;
+    } catch (e: any) {
+      showError(e?.message || 'Failed to resend confirmation email.');
+      return false;
+    }
   };
 
   const loginDemoAccount = (personaId: string) => {
@@ -189,6 +229,7 @@ export function useRippleAuth() {
     currentUser,
     loginWithEmail,
     signUpWithEmail,
+    resendConfirmationEmail,
     loginDemoAccount,
     logout
   };

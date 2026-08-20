@@ -41,11 +41,11 @@ export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly
 
 export interface RecurrenceRule {
   type: RecurrenceType;
-  interval?: number; // e.g. 1 = every week, 2 = every 2 weeks
+  interval?: number;
   daysOfWeek?: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
-  startDate?: string; // YYYY-MM-DD
-  endDate?: string;   // YYYY-MM-DD optional cutoff
-  count?: number;     // max occurrences
+  startDate?: string;
+  endDate?: string;
+  count?: number;
 }
 
 export interface TimetableSlot {
@@ -61,7 +61,7 @@ export interface TimetableSlot {
   weight: number; // 1 to 100%
   reminders?: ReminderTiming[];
   recurrence?: RecurrenceRule;
-  specificDate?: string; // YYYY-MM-DD for single-occurrence / only-this-week class
+  specificDate?: string;
   notes?: string;
 }
 
@@ -71,7 +71,7 @@ export interface Task {
   description?: string;
   slotId?: string;
   hasDeadline?: boolean;
-  dueDate?: string; // ISO String in UTC
+  dueDate?: string;
   estimatedHours: number;
   completionPercentage: number;
   taskType: TaskType;
@@ -90,14 +90,14 @@ export interface DomainConsequence {
   severity: 'low' | 'medium' | 'high' | 'severe';
   title: string;
   description: string;
-  impactScore: number; // 0 - 100
+  impactScore: number;
 }
 
 export interface SplitTimelineScenario {
   title: string;
   timeframe: string;
   outcomeSummary: string;
-  stressLevel: number; // 1 - 10
+  stressLevel: number;
   academicImpact: string;
   socialImpact: string;
   energyCost: string;
@@ -131,7 +131,7 @@ export interface EvidenceEntry {
   predictedScenario: string;
   actualOutcome: string;
   wasOnTime: boolean;
-  accuracyRating: number; // 1-5
+  accuracyRating: number;
   dateLogged: string;
   userNotes?: string;
 }
@@ -145,12 +145,24 @@ export interface StudyLog {
   source: 'manual' | 'timer';
 }
 
+export interface DailyStudySummary {
+  date: string; // YYYY-MM-DD
+  dayLabel: string; // Mon, Tue, etc.
+  targetHours: number;
+  completedHours: number;
+  shortfallHours: number; // positive if completed < target, negative or 0 if target met
+  sessionsCount: number;
+}
+
 export interface ProcrastinationDebt {
-  totalHoursBehind: number;
+  totalHoursBehind: number; // study debt shortfall + delayed task backlog
   missedDeadlinesCount: number;
   streakDays: number;
-  compoundingScore: number; // calculated metric
+  compoundingScore: number; // 0 to 100 risk score
   weeklyDebtTrend: { day: string; debtHours: number }[];
+  dailyTargetHours?: number; // default daily goal e.g. 3.5h
+  recommendedNextDayTargetHours?: number; // AI-computed adaptive next-day goal
+  studyDeficitHours?: number; // accumulated study hour shortfall
 }
 
 export interface NotificationSettings {
@@ -167,7 +179,7 @@ export interface ScheduledNotification {
   itemType: 'task' | 'class' | 'overdue';
   title: string;
   body: string;
-  triggerTime: string; // ISO UTC
+  triggerTime: string;
   reminderOffset: ReminderTiming;
   status: 'pending' | 'sent' | 'cancelled';
   createdAt: string;
@@ -177,7 +189,8 @@ export interface UserSettings {
   intensityMode: IntensityMode;
   isMinorProfile: boolean;
   weeklyDigestOnly: boolean;
-  personalVelocityMultiplier: number; // e.g. 1.2x
+  personalVelocityMultiplier: number;
+  dailyStudyTargetHours?: number; // daily planned study target (default 3.0h)
 }
 
 export interface ActiveTimerState {
@@ -188,8 +201,8 @@ export interface ActiveTimerState {
   totalSeconds: number;
   secondsLeft: number;
   isRunning: boolean;
-  targetEndTime: number | null; // epoch timestamp ms
-  startedAt: number; // epoch timestamp ms
+  targetEndTime: number | null;
+  startedAt: number;
   initialDurationMinutes: number;
   isMinimized: boolean;
 }

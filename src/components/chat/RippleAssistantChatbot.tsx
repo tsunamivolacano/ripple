@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRipple } from '@/context/RippleContext';
+import { computeDailyStudySummaries } from '@/utils/studyDebtUtils';
 import { 
   X, 
   Send, 
@@ -24,69 +25,24 @@ interface Message {
   chips?: string[];
 }
 
-const KNOWLEDGE_BASE: { keywords: string[]; answer: string; chips?: string[] }[] = [
-  {
-    keywords: ['doomsday', 'gauge', 'dial', 'ring', 'circle', 'buffer'],
-    answer: "The **Doomsday Gauge** is RIPPLE's multi-ring risk dial:\n\n1. **Outer Ring**: Shows your remaining time buffer vs. estimated task work time.\n2. **Academic Ring (Red)**: Grade weight & teacher strictness risk.\n3. **Social Ring (Yellow)**: Commitment & team impact.\n4. **Physical Ring (Purple)**: Sleep & energy penalty.\n\n• **Green**: Healthy buffer ratio (> 3.0x)\n• **Yellow**: Tight schedule (1.5x - 3.0x)\n• **Red / Pulsing**: Critical doomsday warning (< 1.5x)",
-    chips: ['What is Coach vs Doomsday Mode?', 'How do I start a Focus Sprint?']
-  },
-  {
-    keywords: ['mode', 'intensity', 'coach', 'doomsday mode', 'standard'],
-    answer: "RIPPLE offers **3 AI Intensity Modes** (selectable in top navbar):\n\n• **Coach Mode**: Gentle, supportive micro-goals and encouraging feedback. Perfect when feeling overwhelmed or stressed.\n• **Standard Mode**: Objective, balanced consequence forecasts.\n• **Doomsday Mode**: Vivid, high-urgency narratives to break deadline paralysis.",
-    chips: ['How does the Doomsday Gauge work?', 'What is Procrastination Debt?']
-  },
-  {
-    keywords: ['debt', 'ledger', 'compounding', 'behind', 'score'],
-    answer: "The **Procrastination Debt Ledger** tracks the hidden costs of task delays:\n\n• **Compounding Score (0-100)**: Rises when you delay or renegotiate deadlines.\n• **Total Hours Behind**: Calculated backlog of work.\n• **Streak**: Consecutive days completing tasks on time.\n\n*Tip*: Completing tasks or running 20-min catch-up sprints lowers your debt score!",
-    chips: ['How do I renegotiate a deadline?', 'What are Evidence Case Files?']
-  },
-  {
-    keywords: ['timeline', 'split', 'simulator', 'scenario', 'predict', 'consequence'],
-    answer: "Clicking **Predict Consequence** on any task launches the **Split-Timeline Simulator**:\n\n• **Timeline A (Start Now)**: Shows avoided stress, grade protection, and free evening downtime.\n• **Timeline B (Delay 2 Hours)**: Simulates the late-night panic cascade, fatigue penalties, and strict teacher reactions side-by-side.",
-    chips: ['How do Focus Sprints work?', 'What are Teacher Strictness Tags?']
-  },
-  {
-    keywords: ['teacher', 'strictness', 'tag', 'stakes', 'cold call', 'notebook'],
-    answer: "Teacher tags personalize AI predictions based on real human behaviors:\n\n• **Spot Cold-Calls**: Teacher puts unprepared students on the spot in class.\n• **Checks Notebook Copies**: Manual inspection at class start.\n• **Strict Locks Doors**: Strict arrival policy.\n• **Public Scolder**: Public feedback on missing work.\n\nAdding these in the **Timetable & Context** tab automatically increases risk scores for strict classes!",
-    chips: ['How do I add a Timetable class?', 'What is the Evidence Log?']
-  },
-  {
-    keywords: ['renegotiate', 'extend', 'delay', 'deadline', 'reason'],
-    answer: "If you physically cannot finish a task in time, click **Predict Consequence** -> **Renegotiate Task Buffer**:\n\n1. Select an honest reason (underestimated time, burnout, or emergency).\n2. Choose a new window (+12h, +24h, +48h).\n3. RIPPLE resets the Doomsday Dial while adding a transparent +0.5h debt entry so you avoid deadline ghosting.",
-    chips: ['What is Procrastination Debt?', 'How do Focus Sprints work?']
-  },
-  {
-    keywords: ['focus', 'sprint', 'pomodoro', 'timer', 'start now'],
-    answer: "Clicking **Start Now** opens **Focus Sprint Mode**:\n\n• Built-in 25-minute Pomodoro timer.\n• Live completion percentage slider.\n• When finished, triggers a **Positive Counter-Loop** celebrating avoided consequences!",
-    chips: ['What is the Split-Timeline Simulator?', 'How do I log an Evidence Case File?']
-  },
-  {
-    keywords: ['evidence', 'case file', 'log', 'rating', 'accuracy'],
-    answer: "The **Evidence Case File Log** helps calibrate RIPPLE's AI accuracy:\n\n1. After a deadline passes, log the actual real-world outcome.\n2. Rate AI forecast accuracy from 1 to 5 stars.\n3. RIPPLE adjusts its personal velocity multiplier so future estimates match your actual working pace!",
-    chips: ['How does Velocity Multiplier work?', 'What is Procrastination Debt?']
-  },
-  {
-    keywords: ['calendar', 'local', 'timezone', 'month', 'week', 'day'],
-    answer: "The **Live Calendar** tab combines your real-world timetable classes and task deadlines in your exact local device timezone. You can toggle between Month, Week, and Day views or filter between Tasks vs. Classes.",
-    chips: ['How do I add a new task?', 'How do I add a Timetable class?']
-  },
-  {
-    keywords: ['add', 'new task', 'create', 'assignment'],
-    answer: "To add a new task:\n\n1. Click the **+ New Task** button in the top navbar.\n2. Choose **Academic Task** or **Personal / Life Goal**.\n3. Enter the title, estimated hours, and deadline.\n4. Optionally link it to a timetable class for strictness tracking!",
-    chips: ['How do Teacher Strictness Tags work?', 'What is Coach vs Doomsday Mode?']
-  }
-];
-
 const DEFAULT_CHIPS = [
-  'How does the Doomsday Gauge work?',
-  'What is Coach vs Doomsday Mode?',
-  'How do Teacher Strictness tags work?',
-  'What is Procrastination Debt?',
-  'How do Focus Sprints work?'
+  'What is my study debt status today?',
+  'Explain the Case File',
+  'How does the Debt Ledger work?',
+  'What is my recommended study goal tomorrow?',
+  'How does the Doomsday Gauge work?'
 ];
 
 export const RippleAssistantChatbot: React.FC = () => {
-  const { startTutorial } = useRipple();
+  const { 
+    startTutorial, 
+    studyLogs, 
+    tasks, 
+    debt, 
+    evidenceEntries, 
+    settings 
+  } = useRipple();
+
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -94,7 +50,7 @@ export const RippleAssistantChatbot: React.FC = () => {
     {
       id: 'welcome-msg',
       sender: 'bot',
-      text: "👋 Hi! I'm **RIPPLE Guide**, your AI assistant. Ask me anything about Doomsday Gauges, Intensity Modes, Split Timelines, Teacher Strictness Tags, or Procrastination Debt!",
+      text: "👋 Hi! I'm **RIPPLE AI**, your study and consequence awareness coach. I track your real study hours in Supabase, your **Case File** study context, and your **Debt Ledger** study deficit.",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       chips: DEFAULT_CHIPS
     }
@@ -107,6 +63,80 @@ export const RippleAssistantChatbot: React.FC = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isOpen]);
+
+  // Compute live user stats
+  const totalStudyMinutes = studyLogs.reduce((acc, l) => acc + (Number(l.durationMinutes) || 0), 0);
+  const totalStudyHours = (totalStudyMinutes / 60).toFixed(1);
+  const dailyTarget = settings.dailyStudyTargetHours || 3.0;
+
+  const { summaries, totalWeekCompletedHours, totalWeekShortfall, recommendedNextDayTarget } = computeDailyStudySummaries(
+    studyLogs,
+    dailyTarget
+  );
+
+  const activeTasksCount = tasks.filter((t) => t.status !== 'completed').length;
+  const criticalTasksCount = tasks.filter((t) => t.status === 'critical' || t.status === 'too_late').length;
+
+  const generateDataDrivenReply = (query: string): string => {
+    const q = query.toLowerCase();
+
+    // 1. Case File explanation
+    if (q.includes('case file') || q.includes('evidence') || q.includes('context')) {
+      const entriesCount = evidenceEntries.length;
+      const onTimeCount = evidenceEntries.filter((e) => e.wasOnTime).length;
+      const accuracyRate = entriesCount > 0 ? Math.round((onTimeCount / entriesCount) * 100) : 100;
+
+      return `📁 **The Case File is your comprehensive study context dossier:**\n\n` +
+        `• **What it is**: It records your overall academic context, past assignment deadlines, predicted AI consequences vs. actual outcomes, and personal teacher strictness factors.\n` +
+        `• **Your Live Case File Status**: You have **${entriesCount} logged case file entries** with an **on-time rate of ${accuracyRate}%**.\n` +
+        `• **Purpose**: It calibrates your personal velocity multiplier so RIPPLE knows your realistic pace and prevents deadline blindspots.`;
+    }
+
+    // 2. Debt Ledger explanation
+    if (q.includes('debt') || q.includes('ledger') || q.includes('deficit') || q.includes('shortfall') || q.includes('behind')) {
+      return `📉 **The Debt Ledger tracks unfinished study time and task shortfalls (NOT financial debt!):**\n\n` +
+        `• **Your Total Hours Behind**: **${debt.totalHoursBehind} hours**\n` +
+        `• **7-Day Study Shortfall**: **${totalWeekShortfall} hours** behind your daily ${dailyTarget}h goal\n` +
+        `• **Compounding Risk Score**: **${debt.compoundingScore} / 100**\n\n` +
+        `💡 **How to Reduce It**: Whenever you complete Focus Sprints or study extra, this deficit reduces in real time!`;
+    }
+
+    // 3. Recommended Study Goal / Plan
+    if (q.includes('recommend') || q.includes('tomorrow') || q.includes('target') || q.includes('goal')) {
+      return `🎯 **Your Personalized Study Plan & Target Recommendation:**\n\n` +
+        `• **Standard Daily Goal**: ${dailyTarget} hours\n` +
+        `• **Past 7-Day Completed Study**: ${totalWeekCompletedHours} hours across ${studyLogs.length} sessions\n` +
+        `• **Current Shortfall Deficit**: ${totalWeekShortfall} hours\n` +
+        `• **Adaptive Recommendation Tomorrow**: **${recommendedNextDayTarget} hours**\n\n` +
+        `*Why this recommendation?* Instead of forcing you to make up all ${totalWeekShortfall} hours at once, RIPPLE gently adds +${(recommendedNextDayTarget - dailyTarget).toFixed(1)}h to gradually clear debt without burnout.`;
+    }
+
+    // 4. Doomsday Gauge / War Room
+    if (q.includes('doomsday') || q.includes('gauge') || q.includes('war room') || q.includes('ring')) {
+      return `⏰ **The Doomsday Gauge is your multi-ring deadline buffer dial:**\n\n` +
+        `• **Outer Ring**: Remaining time buffer ratio (Time Left ÷ Estimated Work).\n` +
+        `• **Academic Ring**: Teacher strictness risk & grade weight penalty.\n` +
+        `• **Physical Ring**: Sleep and late-night exhaustion penalty.\n\n` +
+        `You currently have **${activeTasksCount} active tasks** (${criticalTasksCount} in critical buffer status).`;
+    }
+
+    // 5. Total study hours / status
+    if (q.includes('study') || q.includes('hours') || q.includes('log') || q.includes('time')) {
+      return `📊 **Your Persistent Supabase Study Record:**\n\n` +
+        `• **All-Time Logged Study**: **${totalStudyHours} hours** (${studyLogs.length} recorded sessions)\n` +
+        `• **This Week Completed**: **${totalWeekCompletedHours} hours**\n` +
+        `• **Daily Goal**: **${dailyTarget} hours/day**\n\n` +
+        `Every session logged from Focus Sprints or manual entry is permanently saved and will never be lost on reload!`;
+    }
+
+    // Fallback overview
+    return `👋 **RIPPLE AI Study Assistant Summary:**\n\n` +
+      `• **Total Study Recorded in Supabase**: ${totalStudyHours} hrs\n` +
+      `• **Current Study Deficit in Debt Ledger**: ${totalWeekShortfall} hrs\n` +
+      `• **Recommended Study Target Tomorrow**: ${recommendedNextDayTarget} hrs\n` +
+      `• **Case File Entries**: ${evidenceEntries.length} entries\n\n` +
+      `Ask me about your **Case File**, **Debt Ledger**, **Doomsday Gauges**, or **Study Recommendations**!`;
+  };
 
   const handleSend = (textToSend?: string) => {
     const query = (textToSend || inputValue).trim();
@@ -122,11 +152,10 @@ export const RippleAssistantChatbot: React.FC = () => {
     setMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setInputValue('');
 
-    // Generate intelligent response
     setTimeout(() => {
-      const lowerQuery = query.toLowerCase();
-      
-      if (lowerQuery.includes('tour') || lowerQuery.includes('tutorial') || lowerQuery.includes('walkthrough')) {
+      const lower = query.toLowerCase();
+
+      if (lower.includes('tour') || lower.includes('tutorial') || lower.includes('walkthrough')) {
         startTutorial();
         const botReply: Message = {
           id: `bot-${Date.now()}`,
@@ -139,30 +168,16 @@ export const RippleAssistantChatbot: React.FC = () => {
         return;
       }
 
-      const match = KNOWLEDGE_BASE.find((kb) =>
-        kb.keywords.some((kw) => lowerQuery.includes(kw))
-      );
-
-      if (match) {
-        const botReply: Message = {
-          id: `bot-${Date.now()}`,
-          sender: 'bot',
-          text: match.answer,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          chips: match.chips || DEFAULT_CHIPS
-        };
-        setMessages((prev) => [...prev, botReply]);
-      } else {
-        const fallbackReply: Message = {
-          id: `bot-${Date.now()}`,
-          sender: 'bot',
-          text: `I'm here to help you navigate RIPPLE! Here are key areas you can ask me about:\n\n• **Doomsday Gauge & Buffers**\n• **AI Intensity Modes (Coach, Standard, Doomsday)**\n• **Split-Timeline Scenario Simulator**\n• **Teacher Strictness & Stakes Tags**\n• **Procrastination Debt Ledger**\n• **Focus Sprint Mode**`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          chips: DEFAULT_CHIPS
-        };
-        setMessages((prev) => [...prev, fallbackReply]);
-      }
-    }, 300);
+      const answer = generateDataDrivenReply(query);
+      const botReply: Message = {
+        id: `bot-${Date.now()}`,
+        sender: 'bot',
+        text: answer,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        chips: DEFAULT_CHIPS
+      };
+      setMessages((prev) => [...prev, botReply]);
+    }, 250);
   };
 
   const renderFormattedText = (text: string) => {
@@ -197,9 +212,9 @@ export const RippleAssistantChatbot: React.FC = () => {
           <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white">
             <Bot className="w-4 h-4 text-white" />
           </div>
-          <span className="tracking-wide">Ask RIPPLE Assistant</span>
+          <span className="tracking-wide">Ask RIPPLE AI</span>
           <Badge className="bg-amber-400 text-slate-950 text-[10px] font-mono px-1.5 py-0 font-bold ml-1">
-            AI
+            Live Data
           </Badge>
         </Button>
       )}
@@ -221,12 +236,12 @@ export const RippleAssistantChatbot: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <h3 className="font-extrabold text-sm text-white">RIPPLE AI Assistant</h3>
+                  <h3 className="font-extrabold text-sm text-white">RIPPLE AI Coach</h3>
                   <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-400 bg-emerald-950/40">
-                    Online
+                    Supabase Live
                   </Badge>
                 </div>
-                <p className="text-[10px] text-slate-400">Ask any question about RIPPLE features</p>
+                <p className="text-[10px] text-slate-400">Context-aware study intelligence & deficit tracker</p>
               </div>
             </div>
 
@@ -313,35 +328,27 @@ export const RippleAssistantChatbot: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Actions Bar */}
+          {/* Quick Action Chips Bar */}
           <div className="px-3 py-1.5 bg-slate-900/90 border-t border-slate-800 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             <button
-              onClick={startTutorial}
-              className="text-[10px] font-bold text-indigo-300 bg-indigo-950/50 hover:bg-indigo-900/80 border border-indigo-500/40 px-2.5 py-1 rounded-lg shrink-0 flex items-center gap-1"
+              onClick={() => handleSend('Explain the Case File')}
+              className="text-[10px] text-indigo-300 hover:text-white bg-indigo-950/60 px-2 py-1 rounded-lg border border-indigo-500/40 shrink-0 font-semibold"
             >
-              <HelpCircle className="w-3 h-3 text-indigo-400" />
-              Launch Step-by-Step Tour
+              📁 Case File
             </button>
 
             <button
-              onClick={() => handleSend('How does the Doomsday Gauge work?')}
-              className="text-[10px] text-slate-400 hover:text-slate-200 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 shrink-0"
+              onClick={() => handleSend('How does the Debt Ledger work?')}
+              className="text-[10px] text-purple-300 hover:text-white bg-purple-950/60 px-2 py-1 rounded-lg border border-purple-500/40 shrink-0 font-semibold"
             >
-              Doomsday Gauge
+              📉 Debt Ledger
             </button>
 
             <button
-              onClick={() => handleSend('What is Coach vs Doomsday Mode?')}
-              className="text-[10px] text-slate-400 hover:text-slate-200 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 shrink-0"
+              onClick={() => handleSend('What is my recommended study goal tomorrow?')}
+              className="text-[10px] text-emerald-300 hover:text-white bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-500/40 shrink-0 font-semibold"
             >
-              Intensity Modes
-            </button>
-
-            <button
-              onClick={() => handleSend('How do Teacher Strictness tags work?')}
-              className="text-[10px] text-slate-400 hover:text-slate-200 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 shrink-0"
-            >
-              Teacher Tags
+              🎯 Adaptive Goal
             </button>
           </div>
 
@@ -354,7 +361,7 @@ export const RippleAssistantChatbot: React.FC = () => {
             className="p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2"
           >
             <Input
-              placeholder="Ask a question about RIPPLE..."
+              placeholder="Ask about your study history, Case File, or Debt..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
