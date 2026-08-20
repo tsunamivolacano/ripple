@@ -240,7 +240,7 @@ export async function sendTestNotification(): Promise<boolean> {
     }
 
     if (sw && typeof sw.showNotification === 'function') {
-      await sw.showNotification(notificationTitle, {
+      const extendedOptions: NotificationOptions & { renotify?: boolean; requireInteraction?: boolean } = {
         body: notificationBody,
         icon: '/placeholder.svg',
         badge: '/placeholder.svg',
@@ -248,7 +248,8 @@ export async function sendTestNotification(): Promise<boolean> {
         renotify: true,
         requireInteraction: false,
         data: { url: window.location.origin }
-      });
+      };
+      await sw.showNotification(notificationTitle, extendedOptions);
     } else {
       new Notification(notificationTitle, {
         body: notificationBody,
