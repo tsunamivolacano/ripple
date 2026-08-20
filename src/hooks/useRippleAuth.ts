@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { safeGetStorage, safeSetStorage, getLocalUserId } from '@/utils/storageUtils';
+import { safeGetStorage, safeSetStorage } from '@/utils/storageUtils';
 import { PERSONAS_MAP } from '@/data/ripplePersonaData';
 import { showSuccess, showError } from '@/utils/toast';
 
@@ -23,7 +23,7 @@ export function useRippleAuth() {
   );
 
   useEffect(() => {
-    // Initial Supabase Session Sync
+    // Check active Supabase Session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (session?.user) {
         const acc: UserAccount = {
@@ -33,11 +33,18 @@ export function useRippleAuth() {
         };
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
+      } else {
+        // If stored user was NOT a demo user and there is no Supabase session, clear it
+        const stored = safeGetStorage<UserAccount | null>('ripple_active_user', null);
+        if (stored && !stored.isDemo) {
+          setCurrentUser(null);
+          localStorage.removeItem('ripple_active_user');
+        }
       }
     });
 
     // Listen for Auth changes across tabs/windows
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         const acc: UserAccount = {
           id: session.user.id,
@@ -46,8 +53,7 @@ export function useRippleAuth() {
         };
         setCurrentUser(acc);
         safeSetStorage('ripple_active_user', acc);
-      } else if (_event === 'SIGNED_OUT') {
-        // If current user wasn't a demo account, clear session
+      } else if (event === 'SIGNED_OUT') {
         const stored = safeGetStorage<UserAccount | null>('ripple_active_user', null);
         if (stored && !stored.isDemo) {
           setCurrentUser(null);
@@ -72,9 +78,8 @@ export function useRippleAuth() {
       });
 
       if (error) {
-        // Check if user exists in auth or if password is valid
+        // If invalid credentials, attempt signup for first-time user convenience
         if (error.message.toLowerCase().includes('invalid login credentials')) {
-          // Attempt automatic signup if first-time user
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email: cleanEmail,
             password: password
@@ -131,7 +136,6 @@ export function useRippleAuth() {
       });
 
       if (error) {
-        // If already registered, attempt login
         if (error.message.toLowerCase().includes('already registered')) {
           return await loginWithEmail(cleanEmail, password);
         }
