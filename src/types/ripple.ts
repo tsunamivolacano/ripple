@@ -193,16 +193,23 @@ export interface UserSettings {
   dailyStudyTargetHours?: number; // daily planned study target (default 3.0h)
 }
 
+export type TimerMode = 'stopwatch' | 'countdown';
+
 export interface ActiveTimerState {
   id: string;
   taskId?: string;
   taskTitle: string;
   subject: string;
+  topic?: string;
+  mode: TimerMode;
   totalSeconds: number;
   secondsLeft: number;
+  elapsedSeconds: number;
   isRunning: boolean;
   targetEndTime: number | null;
-  startedAt: number;
+  startedAt: number; // epoch ms when current run started
+  startTimeISO: string; // ISO string of when session originally began
+  accumulatedSecondsBeforeRun: number;
   initialDurationMinutes: number;
   isMinimized: boolean;
 }

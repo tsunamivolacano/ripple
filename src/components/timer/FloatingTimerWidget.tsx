@@ -6,9 +6,8 @@ import {
   Maximize2, 
   CheckCircle2, 
   X, 
-  BookOpen, 
-  Sparkles,
-  RotateCcw
+  Clock,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,12 +29,27 @@ export const FloatingTimerWidget: React.FC = () => {
     return null;
   }
 
-  const mins = Math.floor(activeTimer.secondsLeft / 60);
-  const secs = activeTimer.secondsLeft % 60;
-  const formattedTime = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  
-  const elapsed = activeTimer.totalSeconds - activeTimer.secondsLeft;
-  const percent = Math.min(100, Math.round((elapsed / Math.max(1, activeTimer.totalSeconds)) * 100));
+  // Format 00:00:00
+  const displaySeconds = activeTimer.mode === 'stopwatch'
+    ? (activeTimer.elapsedSeconds || 0)
+    : (activeTimer.secondsLeft || 0);
+
+  const hours = Math.floor(displaySeconds / 3600);
+  const minutes = Math.floor((displaySeconds % 3600) / 60);
+  const seconds = displaySeconds % 60;
+  const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+  const elapsed = activeTimer.mode === 'stopwatch'
+    ? activeTimer.elapsedSeconds
+    : Math.max(0, activeTimer.totalSeconds - activeTimer.secondsLeft);
+
+  const total = activeTimer.mode === 'stopwatch'
+    ? Math.max(1, activeTimer.elapsedSeconds)
+    : Math.max(1, activeTimer.totalSeconds);
+
+  const percent = activeTimer.mode === 'stopwatch'
+    ? 100
+    : Math.min(100, Math.round((elapsed / total) * 100));
 
   const handleMaximize = () => {
     setTimerMinimized(false);
@@ -55,26 +69,30 @@ export const FloatingTimerWidget: React.FC = () => {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
-              <Sparkles className={`w-4 h-4 ${activeTimer.isRunning ? 'animate-spin' : ''}`} />
+              {activeTimer.mode === 'stopwatch' ? (
+                <Clock className={`w-4 h-4 ${activeTimer.isRunning ? 'animate-pulse text-emerald-400' : ''}`} />
+              ) : (
+                <Sparkles className={`w-4 h-4 ${activeTimer.isRunning ? 'animate-spin' : ''}`} />
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-xs text-white truncate">
-                  {activeTimer.taskTitle}
+                <span className="font-extrabold text-xs text-white truncate max-w-[160px]">
+                  {activeTimer.taskTitle || activeTimer.subject}
                 </span>
                 <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-500/40 text-emerald-300 bg-emerald-950/50">
                   {activeTimer.subject}
                 </Badge>
               </div>
               <span className="text-[10px] text-slate-400 font-mono block">
-                {activeTimer.isRunning ? 'Running in Background...' : 'Timer Paused'}
+                {activeTimer.isRunning ? '🔴 Live Study Timer Recording...' : '⏸️ Timer Paused'}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Digital Clock */}
-            <span className="font-mono text-lg font-extrabold text-emerald-400 tracking-wider">
+            {/* Digital Clock 00:00:00 */}
+            <span className="font-mono text-base sm:text-lg font-extrabold text-emerald-400 tracking-wider">
               {formattedTime}
             </span>
 
@@ -104,15 +122,15 @@ export const FloatingTimerWidget: React.FC = () => {
               <Maximize2 className="w-3.5 h-3.5" />
             </Button>
 
-            {/* Finish & Log */}
+            {/* Stop & Log */}
             <Button
               size="sm"
               onClick={stopAndLogTimer}
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold h-8 px-2.5 gap-1 rounded-xl shadow-md"
-              title="Save Elapsed Time & Finish"
+              title="Stop & Save to Study Log"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Finish</span>
+              <span>Stop & Save</span>
             </Button>
 
             {/* Cancel */}
@@ -127,13 +145,20 @@ export const FloatingTimerWidget: React.FC = () => {
         </div>
 
         {/* Live Mini Progress Bar */}
-        <div className="space-y-1">
-          <Progress value={percent} className="h-1.5 bg-slate-950 [&>div]:bg-emerald-500" />
-          <div className="flex justify-between text-[9px] font-mono text-slate-400">
-            <span>{percent}% Completed</span>
-            <span>Total {activeTimer.initialDurationMinutes}m Block</span>
+        {activeTimer.mode === 'countdown' ? (
+          <div className="space-y-1">
+            <Progress value={percent} className="h-1.5 bg-slate-950 [&>div]:bg-emerald-500" />
+            <div className="flex justify-between text-[9px] font-mono text-slate-400">
+              <span>{percent}% Elapsed</span>
+              <span>Total {activeTimer.initialDurationMinutes}m Goal</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex justify-between text-[9px] font-mono text-slate-400 pt-0.5">
+            <span>Started at {new Date(activeTimer.startTimeISO).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span className="text-emerald-400 font-semibold">{Math.max(1, Math.round((activeTimer.elapsedSeconds || 0) / 60))}m Logged</span>
+          </div>
+        )}
 
       </div>
     </div>
