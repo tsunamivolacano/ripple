@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Task, 
   ProcrastinationDebt
@@ -58,9 +58,8 @@ export function useRippleData(currentUser: UserAccount | null) {
   );
 
   const evidenceModule = useRippleEvidence(currentUser);
-  const timerModule = useRippleTimer(studyLogsModule.addStudyLog);
 
-  const isInitialLoadDoneRef = useRef(false);
+  const timerModule = useRippleTimer(studyLogsModule.addStudyLog);
 
   // Load account data when currentUser changes (Cloud-first)
   useEffect(() => {
@@ -74,7 +73,6 @@ export function useRippleData(currentUser: UserAccount | null) {
         studyLogsModule.setStudyLogs([]);
         setDebt(emptyDebt);
         setIsLoadingData(false);
-        isInitialLoadDoneRef.current = false;
         return;
       }
 
@@ -91,7 +89,6 @@ export function useRippleData(currentUser: UserAccount | null) {
         settingsModule.setSettings(persona.settings);
         setCurrentPersonaId(persona.id);
         setIsLoadingData(false);
-        isInitialLoadDoneRef.current = true;
         return;
       }
 
@@ -106,7 +103,6 @@ export function useRippleData(currentUser: UserAccount | null) {
           setDebt(cloudData.debt);
           settingsModule.setSettings(cloudData.settings);
           settingsModule.setNotificationSettings(cloudData.notificationSettings);
-          isInitialLoadDoneRef.current = true;
         }
       } catch (e) {
         console.error('[useRippleData] Error loading cloud data:', e);
@@ -124,9 +120,9 @@ export function useRippleData(currentUser: UserAccount | null) {
     };
   }, [currentUser?.id]);
 
-  // Recompute unified study debt & daily shortfall whenever study logs, tasks or daily target change
+  // Recompute unified study debt & daily shortfall whenever study logs or tasks change
   useEffect(() => {
-    if (!isLoadingData && currentUser && isInitialLoadDoneRef.current) {
+    if (!isLoadingData && currentUser) {
       const targetHours = settingsModule.settings.dailyStudyTargetHours || 3.0;
       const recomputedDebt = calculateUnifiedDebt(
         studyLogsModule.studyLogs,
@@ -140,11 +136,11 @@ export function useRippleData(currentUser: UserAccount | null) {
         syncDebtUpsert(currentUser.id, recomputedDebt);
       }
     }
-  }, [studyLogsModule.studyLogs, tasksModule.tasks.length, settingsModule.settings.dailyStudyTargetHours]);
+  }, [studyLogsModule.studyLogs.length, tasksModule.tasks, settingsModule.settings.dailyStudyTargetHours]);
 
-  // Local storage persistence backup (Only runs AFTER initial load completes to avoid wiping cache)
+  // Local storage persistence backup for offline resilience
   useEffect(() => {
-    if (currentUser && !currentUser.isDemo && !isLoadingData && isInitialLoadDoneRef.current) {
+    if (currentUser && !currentUser.isDemo && !isLoadingData) {
       const uKey = currentUser.id;
       safeSetStorage(`ripple_slots_${uKey}`, slotsModule.slots);
       safeSetStorage(`ripple_tasks_${uKey}`, tasksModule.tasks);

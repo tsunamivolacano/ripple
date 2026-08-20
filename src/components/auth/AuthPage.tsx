@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { ALL_PERSONAS } from '@/data/ripplePersonaData';
-import { Zap, Mail, Lock, ArrowRight, UserPlus, LogIn, AlertCircle, ShieldCheck, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Zap, Mail, Lock, ArrowRight, UserPlus, LogIn, AlertCircle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,9 +9,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export const AuthPage: React.FC = () => {
-  const { loginWithEmail, signUpWithEmail, resendConfirmationEmail, loginDemoAccount } = useRipple();
+  const { loginWithEmail, signUpWithEmail, loginDemoAccount } = useRipple();
 
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
@@ -19,31 +18,21 @@ export const AuthPage: React.FC = () => {
   const [signUpPassword, setSignUpPassword] = useState('');
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [needsConfirmationEmail, setNeedsConfirmationEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isResending, setIsResending] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    setInfoMessage(null);
-    setNeedsConfirmationEmail(null);
-
-    const email = loginEmail.trim();
-    if (!email || !loginPassword) {
+    if (!loginEmail.trim() || !loginPassword.trim()) {
       setErrorMessage('Please provide both email and password.');
       return;
     }
 
     setIsLoading(true);
-    const result = await loginWithEmail(email, loginPassword);
+    const result = await loginWithEmail(loginEmail, loginPassword);
     setIsLoading(false);
 
     if (!result.success) {
-      if (result.needsEmailConfirmation) {
-        setNeedsConfirmationEmail(email);
-      }
       setErrorMessage(result.error || 'Authentication failed. Please check your credentials.');
     }
   };
@@ -51,11 +40,7 @@ export const AuthPage: React.FC = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    setInfoMessage(null);
-    setNeedsConfirmationEmail(null);
-
-    const email = signUpEmail.trim();
-    if (!email || !signUpPassword) {
+    if (!signUpEmail.trim() || !signUpPassword.trim()) {
       setErrorMessage('Please fill in all fields.');
       return;
     }
@@ -66,24 +51,12 @@ export const AuthPage: React.FC = () => {
     }
 
     setIsLoading(true);
-    const result = await signUpWithEmail(email, signUpPassword);
+    const result = await signUpWithEmail(signUpEmail, signUpPassword);
     setIsLoading(false);
 
-    if (result.success && result.needsEmailConfirmation) {
-      setNeedsConfirmationEmail(email);
-      setInfoMessage(result.error || 'Account created! Please check your email to confirm your account.');
-    } else if (!result.success) {
+    if (!result.success) {
       setErrorMessage(result.error || 'Registration failed. Please try again.');
     }
-  };
-
-  const handleResendConfirmation = async () => {
-    const email = needsConfirmationEmail || loginEmail.trim() || signUpEmail.trim();
-    if (!email) return;
-
-    setIsResending(true);
-    await resendConfirmationEmail(email);
-    setIsResending(false);
   };
 
   return (
@@ -108,15 +81,7 @@ export const AuthPage: React.FC = () => {
 
         {/* Auth Box */}
         <Card className="bg-slate-900/90 border-slate-800 text-white shadow-2xl rounded-2xl backdrop-blur-md">
-          <Tabs
-            value={activeTab}
-            onValueChange={(val: any) => {
-              setActiveTab(val);
-              setErrorMessage(null);
-              setInfoMessage(null);
-            }}
-            className="w-full"
-          >
+          <Tabs defaultValue="login" className="w-full" onValueChange={() => setErrorMessage(null)}>
             <CardHeader className="pb-3 border-b border-slate-800/80">
               <TabsList className="grid grid-cols-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 <TabsTrigger value="login" className="text-xs font-semibold data-[state=active]:bg-rose-600 data-[state=active]:text-white rounded-lg">
@@ -131,48 +96,10 @@ export const AuthPage: React.FC = () => {
             </CardHeader>
 
             <CardContent className="p-6 space-y-5">
-              {/* Feedback Alerts */}
               {errorMessage && (
-                <div className="p-3.5 rounded-xl bg-rose-950/70 border border-rose-500/50 flex flex-col gap-2 text-rose-300 text-xs">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                    <span>{errorMessage}</span>
-                  </div>
-                  {needsConfirmationEmail && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={isResending}
-                      onClick={handleResendConfirmation}
-                      className="self-start mt-1 border-rose-500/40 bg-rose-900/40 hover:bg-rose-800/60 text-white text-[11px] h-7 px-2.5 gap-1"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isResending ? 'animate-spin' : ''}`} />
-                      Resend Confirmation Email
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {infoMessage && (
-                <div className="p-3.5 rounded-xl bg-emerald-950/70 border border-emerald-500/50 flex flex-col gap-2 text-emerald-300 text-xs">
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span>{infoMessage}</span>
-                  </div>
-                  {needsConfirmationEmail && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={isResending}
-                      onClick={handleResendConfirmation}
-                      className="self-start mt-1 border-emerald-500/40 bg-emerald-900/40 hover:bg-emerald-800/60 text-white text-[11px] h-7 px-2.5 gap-1"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isResending ? 'animate-spin' : ''}`} />
-                      Resend Verification Link
-                    </Button>
-                  )}
+                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/50 flex items-center gap-2 text-rose-300 text-xs">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{errorMessage}</span>
                 </div>
               )}
 
@@ -190,7 +117,6 @@ export const AuthPage: React.FC = () => {
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       required
-                      autoComplete="email"
                       className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
                     />
                   </div>
@@ -206,7 +132,6 @@ export const AuthPage: React.FC = () => {
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
-                      autoComplete="current-password"
                       className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
                     />
                   </div>
@@ -216,7 +141,7 @@ export const AuthPage: React.FC = () => {
                     disabled={isLoading}
                     className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-lg shadow-rose-950"
                   >
-                    {isLoading ? 'Signing In...' : 'Sign In'}
+                    {isLoading ? 'Authenticating...' : 'Sign In'}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
@@ -236,7 +161,6 @@ export const AuthPage: React.FC = () => {
                       value={signUpEmail}
                       onChange={(e) => setSignUpEmail(e.target.value)}
                       required
-                      autoComplete="email"
                       className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
                     />
                   </div>
@@ -252,7 +176,6 @@ export const AuthPage: React.FC = () => {
                       value={signUpPassword}
                       onChange={(e) => setSignUpPassword(e.target.value)}
                       required
-                      autoComplete="new-password"
                       className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
                     />
                   </div>
