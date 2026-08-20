@@ -19,7 +19,7 @@ import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot
 import { FloatingTimerWidget } from '@/components/timer/FloatingTimerWidget';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Task } from '@/types/ripple';
-import { Eye, LogOut, Loader2 } from 'lucide-react';
+import { Shield, Eye, LogOut, Loader2, CloudCheck, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const RippleAppContent: React.FC = () => {

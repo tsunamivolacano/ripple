@@ -3,46 +3,38 @@ import { useRipple } from '@/context/RippleContext';
 import { 
   TrendingDown, 
   Sparkles,
-  ShieldCheck,
-  AlertCircle,
-  BookOpen,
-  Target,
-  Clock
+  ShieldCheck
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export const DebtLedgerView: React.FC = () => {
-  const { debt, studyLogs, settings } = useRipple();
+  const { debt } = useRipple();
 
   const getRiskBadge = () => {
     if (debt.compoundingScore > 70) {
-      return <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/50">Severe Backlog Deficit</Badge>;
+      return <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/50">Severe Debt Compounding</Badge>;
     } else if (debt.compoundingScore > 40) {
-      return <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/50">Moderate Study Deficit</Badge>;
+      return <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/50">Moderate Task Backlog</Badge>;
     } else {
-      return <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/50">Healthy Buffer & Flow</Badge>;
+      return <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/50">Healthy Buffer Flow</Badge>;
     }
   };
-
-  const dailyTarget = debt.dailyTargetHours || settings.dailyStudyTargetHours || 3.0;
-  const studyShortfall = debt.studyDeficitHours ?? 0;
-  const recommendedTomorrow = debt.recommendedNextDayTargetHours || dailyTarget;
 
   return (
     <div data-tour="debt-section" className="space-y-6">
       {/* Top Banner Overview */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-950/60 via-slate-900 to-slate-950 border border-purple-500/30 space-y-4 shadow-xl">
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-950/60 via-slate-900 to-slate-950 border border-purple-500/30 space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <TrendingDown className="w-5 h-5 text-purple-400" />
               <h2 className="text-xl font-extrabold text-white">
-                Procrastination & Study Debt Ledger
+                Procrastination Debt Ledger
               </h2>
               {getRiskBadge()}
             </div>
             <p className="text-xs text-slate-400">
-              Tracks accumulated unfinished study time, daily goal shortfalls, and task delays. <em>(Note: This is study time debt, not financial debt—it decreases automatically when you study extra!)</em>
+              Tracks the hidden, compounding cost of delayed tasks and late night all-nighters.
             </p>
           </div>
 
@@ -63,55 +55,46 @@ export const DebtLedgerView: React.FC = () => {
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
-          <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
-            <Clock className="w-4 h-4 text-rose-400" />
-            Total Study Hours Behind Goal
-          </span>
+          <span className="text-xs font-semibold text-slate-400">Total Hours Behind Schedule</span>
           <h3 className="text-3xl font-extrabold text-rose-400 font-mono">
             {debt.totalHoursBehind} hrs
           </h3>
           <p className="text-[11px] text-slate-500">
-            Includes {studyShortfall}h study deficit from past days + pending urgent task backlog.
+            Estimated extra focused effort required to clear task debt.
           </p>
         </div>
 
         <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
-          <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
-            <AlertCircle className="w-4 h-4 text-amber-400" />
-            Missed / Overdue Deadlines
-          </span>
+          <span className="text-xs font-semibold text-slate-400">Missed Deadlines Count</span>
           <h3 className="text-3xl font-extrabold text-amber-400 font-mono">
             {debt.missedDeadlinesCount}
           </h3>
           <p className="text-[11px] text-slate-500">
-            Tasks past due or in critical doomsday buffer territory.
+            Historical unsubmitted or severely delayed tasks.
           </p>
         </div>
 
         <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
-          <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
-            <Target className="w-4 h-4 text-indigo-400" />
-            Next-Day Adaptive Study Target
-          </span>
+          <span className="text-xs font-semibold text-slate-400">Velocity Calibration Multiplier</span>
           <h3 className="text-3xl font-extrabold text-indigo-400 font-mono">
-            {recommendedTomorrow} hrs
+            1.15x
           </h3>
           <p className="text-[11px] text-slate-500">
-            AI-calibrated target: base ({dailyTarget}h) + gentle deficit recovery.
+            AI automatically adjusts estimates (you take 15% longer than planned).
           </p>
         </div>
       </div>
 
-      {/* 7-Day Shortfall Trend Chart */}
+      {/* Debt Trend Bar Chart Representation */}
       <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-purple-400" />
-          7-Day Shortfall Accumulation Trend
+          7-Day Debt Accumulation Trend
         </h3>
 
         <div className="h-40 flex items-end justify-between gap-3 pt-4 px-2 border-b border-slate-800">
           {debt.weeklyDebtTrend.map((item, index) => {
-            const heightPercentage = Math.min(100, (item.debtHours / 5.0) * 100);
+            const heightPercentage = Math.min(100, (item.debtHours / 6.0) * 100);
             return (
               <div key={index} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
                 <span className="text-[10px] font-mono text-purple-300 font-semibold">{item.debtHours}h</span>
@@ -130,21 +113,21 @@ export const DebtLedgerView: React.FC = () => {
       <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          Recommended Deficit Recovery Actions
+          Recommended Debt Recovery Actions
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
           <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-            <h4 className="font-bold text-emerald-300">1. Run a 25-min Focus Sprint</h4>
+            <h4 className="font-bold text-emerald-300">1. Execute a 50-Minute Emergency Catch-Up Sprint</h4>
             <p className="text-slate-400">
-              Each completed focus block is saved to Supabase and immediately shaves off your study shortfall.
+              Clear low-hanging micro-tasks to immediately lower your compounding debt score by -15 pts.
             </p>
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-            <h4 className="font-bold text-indigo-300">2. Aim for {recommendedTomorrow}h Study Tomorrow</h4>
+            <h4 className="font-bold text-blue-300">2. Enable Coach Intensity Mode</h4>
             <p className="text-slate-400">
-              Gradually making up {((recommendedTomorrow - dailyTarget)).toFixed(1)}h extra study time resets your compounding score safely.
+              Switch AI framing to supportive micro-steps if feeling overwhelmed by high task debt.
             </p>
           </div>
         </div>
