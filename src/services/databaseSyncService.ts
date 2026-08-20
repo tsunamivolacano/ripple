@@ -40,16 +40,67 @@ export {
 };
 
 /**
+ * Gather any local data stored under current user ID or legacy local storage keys
+ * to guarantee that previously created data is never lost.
+ */
+function gatherLocalUserData(userId: string) {
+  const possibleKeys = [
+    userId,
+    `usr_${userId}`,
+    userId.replace(/[^a-zA-Z0-9]/g, '_'),
+    'default'
+  ];
+
+  let localSlots: TimetableSlot[] = [];
+  let localTasks: Task[] = [];
+  let localEvidence: EvidenceEntry[] = [];
+  let localStudy: StudyLog[] = [];
+  let localSettings: UserSettings = defaultSettings;
+  let localNotifSettings: NotificationSettings = defaultNotifSettings;
+
+  for (const k of possibleKeys) {
+    const s = safeGetStorage<TimetableSlot[]>(`ripple_slots_${k}`, []);
+    if (s.length > 0 && localSlots.length === 0) localSlots = s;
+
+    const t = safeGetStorage<Task[]>(`ripple_tasks_${k}`, []);
+    if (t.length > 0 && localTasks.length === 0) localTasks = t;
+
+    const e = safeGetStorage<EvidenceEntry[]>(`ripple_evidence_${k}`, []);
+    if (e.length > 0 && localEvidence.length === 0) localEvidence = e;
+
+    const st = safeGetStorage<StudyLog[]>(`ripple_study_${k}`, []);
+    if (st.length > 0 && localStudy.length === 0) localStudy = st;
+
+    const set = safeGetStorage<UserSettings | null>(`ripple_settings_${k}`, null);
+    if (set && localSettings === defaultSettings) localSettings = set;
+
+    const n = safeGetStorage<NotificationSettings | null>(`ripple_notif_settings_${k}`, null);
+    if (n && localNotifSettings === defaultNotifSettings) localNotifSettings = n;
+  }
+
+  return {
+    localSlots,
+    localTasks,
+    localEvidence,
+    localStudy,
+    localSettings,
+    localNotifSettings
+  };
+}
+
+/**
  * Load all user records from Supabase directly as the primary single source of truth.
  * Automatically synchronizes any offline/local-pending data up to Supabase to prevent data loss.
  */
 export async function loadUserCloudData(userId: string): Promise<UserFullData> {
-  const localSlots = safeGetStorage<TimetableSlot[]>(`ripple_slots_${userId}`, []);
-  const localTasks = safeGetStorage<Task[]>(`ripple_tasks_${userId}`, []);
-  const localEvidence = safeGetStorage<EvidenceEntry[]>(`ripple_evidence_${userId}`, []);
-  const localStudy = safeGetStorage<StudyLog[]>(`ripple_study_${userId}`, []);
-  const localSettings = safeGetStorage<UserSettings>(`ripple_settings_${userId}`, defaultSettings);
-  const localNotifSettings = safeGetStorage<NotificationSettings>(`ripple_notif_settings_${userId}`, defaultNotifSettings);
+  const {
+    localSlots,
+    localTasks,
+    localEvidence,
+    localStudy,
+    localSettings,
+    localNotifSettings
+  } = gatherLocalUserData(userId);
 
   if (!isValidUUID(userId)) {
     const targetHours = localSettings.dailyStudyTargetHours || 3.0;
@@ -75,7 +126,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       fetchNotificationSettings(userId)
     ]);
 
-    // Check if there are local tasks that never synced to DB (e.g. created during network glitch)
+    // 1. Merge and sync unsynced local tasks to Supabase
     const existingDbTaskIds = new Set(dbTasks.map((t) => t.id));
     const unsyncedLocalTasks = localTasks.filter((t) => t.id && !existingDbTaskIds.has(t.id));
 
@@ -86,7 +137,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       }
     }
 
-    // Check if there are local study logs that never synced
+    // 2. Merge and sync unsynced study logs to Supabase
     const existingDbStudyIds = new Set(dbStudy.map((l) => l.id));
     const unsyncedStudy = localStudy.filter((l) => l.id && !existingDbStudyIds.has(l.id));
     if (unsyncedStudy.length > 0) {
@@ -96,7 +147,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       }
     }
 
-    // Check if there are local timetable slots that never synced
+    // 3. Merge and sync unsynced timetable slots to Supabase
     const existingDbSlotIds = new Set(dbSlots.map((s) => s.id));
     const unsyncedSlots = localSlots.filter((s) => s.id && !existingDbSlotIds.has(s.id));
     if (unsyncedSlots.length > 0) {
@@ -106,7 +157,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
       }
     }
 
-    // Check if there are local evidence entries that never synced
+    // 4. Merge and sync unsynced evidence entries to Supabase
     const existingDbEvIds = new Set(dbEvidence.map((e) => e.id));
     const unsyncedEv = localEvidence.filter((e) => e.id && !existingDbEvIds.has(e.id));
     if (unsyncedEv.length > 0) {
@@ -123,7 +174,7 @@ export async function loadUserCloudData(userId: string): Promise<UserFullData> {
     const settings = dbSettings || localSettings;
     const notificationSettings = dbNotif || localNotifSettings;
 
-    // Cache latest authoritative copies
+    // Cache latest authoritative copies locally under canonical user ID
     safeSetStorage(`ripple_study_${userId}`, studyLogs);
     safeSetStorage(`ripple_tasks_${userId}`, tasks);
     safeSetStorage(`ripple_slots_${userId}`, slots);

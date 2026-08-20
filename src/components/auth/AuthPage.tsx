@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useRipple } from '@/context/RippleContext';
 import { ALL_PERSONAS } from '@/data/ripplePersonaData';
-import { Zap, Mail, Lock, ArrowRight, UserPlus, LogIn, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Zap, Mail, Lock, ArrowRight, UserPlus, LogIn, AlertCircle, ShieldCheck, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export const AuthPage: React.FC = () => {
-  const { loginWithEmail, signUpWithEmail, loginDemoAccount } = useRipple();
+  const { loginWithEmail, signUpWithEmail, resendConfirmationEmail, loginDemoAccount } = useRipple();
 
+  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
@@ -18,21 +19,31 @@ export const AuthPage: React.FC = () => {
   const [signUpPassword, setSignUpPassword] = useState('');
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [needsConfirmationEmail, setNeedsConfirmationEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    if (!loginEmail.trim() || !loginPassword.trim()) {
+    setInfoMessage(null);
+    setNeedsConfirmationEmail(null);
+
+    const email = loginEmail.trim();
+    if (!email || !loginPassword) {
       setErrorMessage('Please provide both email and password.');
       return;
     }
 
     setIsLoading(true);
-    const result = await loginWithEmail(loginEmail, loginPassword);
+    const result = await loginWithEmail(email, loginPassword);
     setIsLoading(false);
 
     if (!result.success) {
+      if (result.needsEmailConfirmation) {
+        setNeedsConfirmationEmail(email);
+      }
       setErrorMessage(result.error || 'Authentication failed. Please check your credentials.');
     }
   };
@@ -40,7 +51,11 @@ export const AuthPage: React.FC = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    if (!signUpEmail.trim() || !signUpPassword.trim()) {
+    setInfoMessage(null);
+    setNeedsConfirmationEmail(null);
+
+    const email = signUpEmail.trim();
+    if (!email || !signUpPassword) {
       setErrorMessage('Please fill in all fields.');
       return;
     }
@@ -51,12 +66,24 @@ export const AuthPage: React.FC = () => {
     }
 
     setIsLoading(true);
-    const result = await signUpWithEmail(signUpEmail, signUpPassword);
+    const result = await signUpWithEmail(email, signUpPassword);
     setIsLoading(false);
 
-    if (!result.success) {
+    if (result.success && result.needsEmailConfirmation) {
+      setNeedsConfirmationEmail(email);
+      setInfoMessage(result.error || 'Account created! Please check your email to confirm your account.');
+    } else if (!result.success) {
       setErrorMessage(result.error || 'Registration failed. Please try again.');
     }
+  };
+
+  const handleResendConfirmation = async () => {
+    const email = needsConfirmationEmail || loginEmail.trim() || signUpEmail.trim();
+    if (!email) return;
+
+    setIsResending(true);
+    await resendConfirmationEmail(email);
+    setIsResending(false);
   };
 
   return (
@@ -81,7 +108,15 @@ export const AuthPage: React.FC = () => {
 
         {/* Auth Box */}
         <Card className="bg-slate-900/90 border-slate-800 text-white shadow-2xl rounded-2xl backdrop-blur-md">
-          <Tabs defaultValue="login" className="w-full" onValueChange={() => setErrorMessage(null)}>
+          <Tabs
+            value={activeTab}
+            onValueChange={(val: any) => {
+              setActiveTab(val);
+              setErrorMessage(null);
+              setInfoMessage(null);
+            }}
+            className="w-full"
+          >
             <CardHeader className="pb-3 border-b border-slate-800/80">
               <TabsList className="grid grid-cols-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 <TabsTrigger value="login" className="text-xs font-semibold data-[state=active]:bg-rose-600 data-[state=active]:text-white rounded-lg">
@@ -96,10 +131,48 @@ export const AuthPage: React.FC = () => {
             </CardHeader>
 
             <CardContent className="p-6 space-y-5">
+              {/* Feedback Alerts */}
               {errorMessage && (
-                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/50 flex items-center gap-2 text-rose-300 text-xs">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                  <span>{errorMessage}</span>
+                <div className="p-3.5 rounded-xl bg-rose-950/70 border border-rose-500/50 flex flex-col gap-2 text-rose-300 text-xs">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span>{errorMessage}</span>
+                  </div>
+                  {needsConfirmationEmail && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isResending}
+                      onClick={handleResendConfirmation}
+                      className="self-start mt-1 border-rose-500/40 bg-rose-900/40 hover:bg-rose-800/60 text-white text-[11px] h-7 px-2.5 gap-1"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isResending ? 'animate-spin' : ''}`} />
+                      Resend Confirmation Email
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {infoMessage && (
+                <div className="p-3.5 rounded-xl bg-emerald-950/70 border border-emerald-500/50 flex flex-col gap-2 text-emerald-300 text-xs">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>{infoMessage}</span>
+                  </div>
+                  {needsConfirmationEmail && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isResending}
+                      onClick={handleResendConfirmation}
+                      className="self-start mt-1 border-emerald-500/40 bg-emerald-900/40 hover:bg-emerald-800/60 text-white text-[11px] h-7 px-2.5 gap-1"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isResending ? 'animate-spin' : ''}`} />
+                      Resend Verification Link
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -117,6 +190,7 @@ export const AuthPage: React.FC = () => {
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       required
+                      autoComplete="email"
                       className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
                     />
                   </div>
@@ -132,6 +206,7 @@ export const AuthPage: React.FC = () => {
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
+                      autoComplete="current-password"
                       className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
                     />
                   </div>
@@ -141,7 +216,7 @@ export const AuthPage: React.FC = () => {
                     disabled={isLoading}
                     className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-lg shadow-rose-950"
                   >
-                    {isLoading ? 'Authenticating...' : 'Sign In'}
+                    {isLoading ? 'Signing In...' : 'Sign In'}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
@@ -161,6 +236,7 @@ export const AuthPage: React.FC = () => {
                       value={signUpEmail}
                       onChange={(e) => setSignUpEmail(e.target.value)}
                       required
+                      autoComplete="email"
                       className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
                     />
                   </div>
@@ -176,6 +252,7 @@ export const AuthPage: React.FC = () => {
                       value={signUpPassword}
                       onChange={(e) => setSignUpPassword(e.target.value)}
                       required
+                      autoComplete="new-password"
                       className="bg-slate-950 border-slate-800 text-xs text-white h-10 rounded-xl focus-visible:ring-rose-500"
                     />
                   </div>
@@ -247,4 +324,234 @@ export const AuthPage: React.FC = () => {
       </div>
     </div>
   );
+};
+</dyad-file>
+
+<dyad-write path="src/context/RippleContext.tsx" description="Exposed resendConfirmationEmail in RippleContext">
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { 
+  TimetableSlot, 
+  Task, 
+  EvidenceEntry, 
+  StudyLog, 
+  ProcrastinationDebt, 
+  UserSettings, 
+  NotificationSettings,
+  ActiveTimerState 
+} from '@/types/ripple';
+import { AdminUserSummary } from '@/types/admin';
+import { isAuthorizedAdmin, logAdminAuditAction } from '@/services/adminService';
+import { useRippleAuth, UserAccount, AuthResponse } from '@/hooks/useRippleAuth';
+import { useRippleTutorial } from '@/hooks/useRippleTutorial';
+import { useRippleData } from '@/hooks/useRippleData';
+import { registerServiceWorker } from '@/utils/notificationService';
+import { showSuccess } from '@/utils/toast';
+
+export type { UserAccount, AuthResponse };
+
+interface RippleContextType {
+  currentUser: UserAccount | null;
+  slots: TimetableSlot[];
+  tasks: Task[];
+  evidenceEntries: EvidenceEntry[];
+  studyLogs: StudyLog[];
+  debt: ProcrastinationDebt;
+  settings: UserSettings;
+  notificationSettings: NotificationSettings;
+  currentPersonaId: string;
+  activeTaskForPrediction: Task | null;
+  activeFocusTask: Task | null;
+  completedTaskForCelebration: Task | null;
+  isLoadingData: boolean;
+
+  // Background Timer System
+  activeTimer: ActiveTimerState | null;
+  startGlobalTimer: (params: {
+    taskId?: string;
+    taskTitle: string;
+    subject: string;
+    durationMinutes: number;
+    isMinimized?: boolean;
+  }) => void;
+  pauseGlobalTimer: () => void;
+  resumeGlobalTimer: () => void;
+  resetGlobalTimer: (newDurationMinutes?: number) => void;
+  setTimerMinimized: (minimized: boolean) => void;
+  stopAndLogTimer: () => void;
+  cancelGlobalTimer: () => void;
+
+  // Admin & Support Impersonation State
+  isAdmin: boolean;
+  isAdminView: boolean;
+  setAdminView: (open: boolean) => void;
+  impersonatedUser: AdminUserSummary | null;
+  startImpersonatingUser: (user: AdminUserSummary) => void;
+  exitImpersonatedUser: () => void;
+
+  // Notification Modal
+  isNotificationModalOpen: boolean;
+  setNotificationModalOpen: (open: boolean) => void;
+  updateNotificationSettings: (newSettings: Partial<NotificationSettings>) => Promise<void>;
+
+  // Tutorial State
+  isTutorialOpen: boolean;
+  currentTutorialStep: number;
+  hasCompletedTutorial: boolean;
+  startTutorial: () => void;
+  replayTutorial: () => void;
+  closeTutorial: () => void;
+  completeTutorial: () => void;
+  setTutorialStep: (step: number) => void;
+  
+  // Auth actions
+  loginWithEmail: (email: string, password: string) => Promise<AuthResponse>;
+  signUpWithEmail: (email: string, password: string) => Promise<AuthResponse>;
+  resendConfirmationEmail: (email: string) => Promise<boolean>;
+  loginDemoAccount: (personaId: string) => void;
+  logout: () => void;
+
+  setActiveTaskForPrediction: (task: Task | null) => void;
+  setActiveFocusTask: (task: Task | null) => void;
+  setCompletedTaskForCelebration: (task: Task | null) => void;
+  
+  // Slot management
+  addSlot: (slot: Omit<TimetableSlot, 'id'>) => Promise<void>;
+  updateSlot: (slot: TimetableSlot) => Promise<void>;
+  deleteSlot: (id: string) => Promise<void>;
+
+  // Task management
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  updateTaskProgress: (taskId: string, percentage: number) => Promise<void>;
+  completeTask: (taskId: string) => Promise<void>;
+  renegotiateTask: (taskId: string, newDueDate: string, reason: string) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+
+  // Evidence log management
+  logEvidence: (entry: Omit<EvidenceEntry, 'id' | 'dateLogged'>) => Promise<void>;
+
+  // Study Tracker management
+  addStudyLog: (log: Omit<StudyLog, 'id' | 'loggedAt'>) => Promise<void>;
+  deleteStudyLog: (id: string) => Promise<void>;
+
+  // Settings
+  updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
+  
+  // Persona actions
+  loadPersonaData: (personaId: string) => void;
+  resetAllData: () => void;
+}
+
+const RippleContext = createContext<RippleContextType | undefined>(undefined);
+
+export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const auth = useRippleAuth();
+  const tutorial = useRippleTutorial(auth.currentUser);
+  const data = useRippleData(auth.currentUser);
+
+  const [isAdminView, setAdminView] = useState<boolean>(false);
+  const [impersonatedUser, setImpersonatedUser] = useState<AdminUserSummary | null>(null);
+
+  const isAdmin = isAuthorizedAdmin(auth.currentUser?.email);
+
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
+  const startImpersonatingUser = (user: AdminUserSummary) => {
+    if (!isAdmin) return;
+    setImpersonatedUser(user);
+    setAdminView(false);
+    showSuccess(`Viewing app as ${user.name}`);
+  };
+
+  const exitImpersonatedUser = () => {
+    if (impersonatedUser) {
+      logAdminAuditAction('IMPERSONATE_USER_END', impersonatedUser.id, impersonatedUser.email, `Exited Support Mode for ${impersonatedUser.email}`);
+    }
+    setImpersonatedUser(null);
+    setAdminView(true);
+    showSuccess('Exited Support Mode. Returned to Admin Dashboard.');
+  };
+
+  return (
+    <RippleContext.Provider
+      value={{
+        currentUser: auth.currentUser,
+        loginWithEmail: auth.loginWithEmail,
+        signUpWithEmail: auth.signUpWithEmail,
+        resendConfirmationEmail: auth.resendConfirmationEmail,
+        loginDemoAccount: auth.loginDemoAccount,
+        logout: auth.logout,
+
+        isAdmin,
+        isAdminView,
+        setAdminView,
+        impersonatedUser,
+        startImpersonatingUser,
+        exitImpersonatedUser,
+
+        isTutorialOpen: tutorial.isTutorialOpen,
+        currentTutorialStep: tutorial.currentTutorialStep,
+        hasCompletedTutorial: tutorial.hasCompletedTutorial,
+        startTutorial: tutorial.startTutorial,
+        replayTutorial: tutorial.replayTutorial,
+        closeTutorial: tutorial.closeTutorial,
+        completeTutorial: tutorial.completeTutorial,
+        setTutorialStep: tutorial.setTutorialStep,
+
+        slots: data.slots,
+        tasks: data.tasks,
+        evidenceEntries: data.evidenceEntries,
+        studyLogs: data.studyLogs,
+        debt: data.debt,
+        settings: data.settings,
+        notificationSettings: data.notificationSettings,
+        currentPersonaId: data.currentPersonaId,
+        activeTaskForPrediction: data.activeTaskForPrediction,
+        activeFocusTask: data.activeFocusTask,
+        completedTaskForCelebration: data.completedTaskForCelebration,
+        isLoadingData: data.isLoadingData,
+        isNotificationModalOpen: data.isNotificationModalOpen,
+
+        activeTimer: data.activeTimer,
+        startGlobalTimer: data.startGlobalTimer,
+        pauseGlobalTimer: data.pauseGlobalTimer,
+        resumeGlobalTimer: data.resumeGlobalTimer,
+        resetGlobalTimer: data.resetGlobalTimer,
+        setTimerMinimized: data.setTimerMinimized,
+        stopAndLogTimer: data.stopAndLogTimer,
+        cancelGlobalTimer: data.cancelGlobalTimer,
+
+        setNotificationModalOpen: data.setNotificationModalOpen,
+        setActiveTaskForPrediction: data.setActiveTaskForPrediction,
+        setActiveFocusTask: data.setActiveFocusTask,
+        setCompletedTaskForCelebration: data.setCompletedTaskForCelebration,
+        addSlot: data.addSlot,
+        updateSlot: data.updateSlot,
+        deleteSlot: data.deleteSlot,
+        addTask: data.addTask,
+        updateTaskProgress: data.updateTaskProgress,
+        completeTask: data.completeTask,
+        renegotiateTask: data.renegotiateTask,
+        deleteTask: data.deleteTask,
+        logEvidence: data.logEvidence,
+        addStudyLog: data.addStudyLog,
+        deleteStudyLog: data.deleteStudyLog,
+        updateSettings: data.updateSettings,
+        updateNotificationSettings: data.updateNotificationSettings,
+        loadPersonaData: data.loadPersonaData,
+        resetAllData: data.resetAllData
+      }}
+    >
+      {children}
+    </RippleContext.Provider>
+  );
+};
+
+export const useRipple = () => {
+  const context = useContext(RippleContext);
+  if (!context) {
+    throw new Error('useRipple must be used within a RippleProvider');
+  }
+  return context;
 };
