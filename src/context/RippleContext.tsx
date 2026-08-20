@@ -76,6 +76,7 @@ interface RippleContextType {
   // Auth actions
   loginWithEmail: (email: string, password: string) => Promise<AuthResponse>;
   signUpWithEmail: (email: string, password: string) => Promise<AuthResponse>;
+  resendConfirmationEmail: (email: string) => Promise<boolean>;
   loginDemoAccount: (personaId: string) => void;
   logout: () => void;
 
@@ -148,6 +149,7 @@ export const RippleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         currentUser: auth.currentUser,
         loginWithEmail: auth.loginWithEmail,
         signUpWithEmail: auth.signUpWithEmail,
+        resendConfirmationEmail: auth.resendConfirmationEmail,
         loginDemoAccount: auth.loginDemoAccount,
         logout: auth.logout,
 
