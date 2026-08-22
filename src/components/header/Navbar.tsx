@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { IntensitySelector } from './IntensitySelector';
 import { useRipple } from '@/context/RippleContext';
 import { ALL_PERSONAS } from '@/data/ripplePersonaData';
+import { safeGetStorage } from '@/utils/storageUtils';
+import { SubscriptionTier } from '@/components/subscription/SubscriptionModal';
 import { 
   Zap, 
   Clock, 
-  CalendarDays,
+  CalendarDays, 
   Calendar, 
   FileText, 
   TrendingDown, 
@@ -17,7 +19,8 @@ import {
   RotateCcw,
   Bell,
   BookOpen,
-  Shield
+  Shield,
+  Crown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,15 +37,46 @@ interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onOpenNewTaskModal: () => void;
+  onOpenSubscriptionModal: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenNewTaskModal }) => {
+export const Navbar: React.FC<NavbarProps> = ({ 
+  activeTab, 
+  setActiveTab, 
+  onOpenNewTaskModal,
+  onOpenSubscriptionModal 
+}) => {
   const { debt, studyLogs, currentUser, logout, loginDemoAccount, replayTutorial, hasCompletedTutorial, setNotificationModalOpen, isAdmin, setAdminView } = useRipple();
 
   const activeDemoPersona = ALL_PERSONAS.find(p => p.id === currentUser?.demoPersonaId);
 
   const totalStudyMins = studyLogs.reduce((acc, l) => acc + l.durationMinutes, 0);
   const totalStudyHoursStr = `${Math.floor(totalStudyMins / 60)}h`;
+
+  const currentTier = safeGetStorage<SubscriptionTier>('ripple_subscription_tier', 'free');
+
+  const getTierBadge = () => {
+    switch (currentTier) {
+      case 'pro':
+        return (
+          <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-black gap-1 cursor-pointer">
+            <Crown className="w-3 h-3 text-amber-400" /> PRO TIER
+          </Badge>
+        );
+      case 'lite':
+        return (
+          <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/40 text-[10px] font-black gap-1 cursor-pointer">
+            <Crown className="w-3 h-3 text-rose-400" /> LITE TIER
+          </Badge>
+        );
+      default:
+        return (
+          <Badge className="bg-slate-800 text-slate-300 border-slate-700 text-[10px] font-bold gap-1 cursor-pointer hover:bg-slate-700">
+            <Crown className="w-3 h-3 text-amber-400" /> FREE TIER
+          </Badge>
+        );
+    }
+  };
 
   const navItems = [
     { id: 'warroom', tourKey: 'warroom-tab', label: 'War Room', icon: Clock, badge: debt.missedDeadlinesCount > 0 ? debt.missedDeadlinesCount : null },
@@ -89,6 +123,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
                 <span className="hidden sm:inline">Admin Dashboard</span>
               </Button>
             )}
+
+            {/* Subscription Management Trigger Button */}
+            <button
+              onClick={onOpenSubscriptionModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-950/20 hover:bg-amber-950/40 text-amber-300 transition-all text-xs font-semibold shrink-0"
+              title="Subscription Management & Plans"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">Plans</span>
+              {getTierBadge()}
+            </button>
 
             <IntensitySelector />
 
@@ -142,6 +187,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenN
                   Logged in as {currentUser?.isDemo ? 'Demo Account' : currentUser?.email}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-slate-800" />
+
+                {/* Open Subscription Menu Item */}
+                <DropdownMenuItem
+                  onClick={onOpenSubscriptionModal}
+                  className="cursor-pointer text-amber-300 hover:bg-amber-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-xs font-semibold"
+                >
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Subscription Management</span>
+                  </div>
+                  {getTierBadge()}
+                </DropdownMenuItem>
 
                 {isAdmin && (
                   <>

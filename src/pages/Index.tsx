@@ -14,6 +14,7 @@ import { DebtLedgerView } from '@/components/debt/DebtLedgerView';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
 import { NotificationSettingsModal } from '@/components/settings/NotificationSettingsModal';
+import { SubscriptionModal } from '@/components/subscription/SubscriptionModal';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { RippleAssistantChatbot } from '@/components/chat/RippleAssistantChatbot';
 import { FloatingTimerWidget } from '@/components/timer/FloatingTimerWidget';
@@ -44,6 +45,7 @@ const RippleAppContent: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState('warroom');
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [renegotiateTask, setRenegotiateTask] = useState<Task | null>(null);
 
   if (!currentUser) {
@@ -84,11 +86,12 @@ const RippleAppContent: React.FC = () => {
         </div>
       )}
 
-      {/* Top Navbar Header */}
+      {/* Top Navbar Header with Subscription Trigger */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+        onOpenSubscriptionModal={() => setIsSubscriptionModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -142,6 +145,12 @@ const RippleAppContent: React.FC = () => {
       <NotificationSettingsModal
         isOpen={isNotificationModalOpen}
         onClose={() => setNotificationModalOpen(false)}
+      />
+
+      {/* Subscription Management Modal */}
+      <SubscriptionModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
       />
 
       {/* Modals & Overlays */}
